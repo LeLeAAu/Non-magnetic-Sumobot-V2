@@ -4,6 +4,8 @@
 
 The project focuses on the synergy between **Asymmetric Mechanical Design** and **Multi-threaded Data Processing**. Our core objective is to create an entity capable of instantaneous reflexes and tactical dominance through intelligent maneuvering on the **FreeRTOS** platform.
 
+<img width="3300" height="2550" alt="Render" src="https://github.com/user-attachments/assets/d60f8a85-f728-4827-a75c-6e8db40fb1ce" />
+
 ## 1. Project Status
 - **Status:** `Ongoing` (In active development). 
 - *Note:* The project is currently pacing itself based on the author's budget constraints—engineering brilliance is infinite, but student funds are not.
@@ -170,6 +172,9 @@ The brain operates on a 19-state FSM managed by `enterState()`, which handles st
 # I. Tổng quan
 Non-magnetic-Sumobot-V2 là hệ thống robot tự hành sử dụng vi điều khiển ESP32, được thiết kế chuyên biệt cho môi trường thi đấu tại UTC.
 Dự án tập trung vào việc kết hợp giữa Thiết kế cơ khí bất đối xứng và Xử lý dữ liệu đa luồng. Mục tiêu là tạo ra một thực thể có khả năng phản xạ tức thì và chiếm ưu thế nhờ các chiến thuật cơ động thông minh trên nền tảng FreeRTOS.
+
+<img width="3300" height="2550" alt="Render" src="https://github.com/user-attachments/assets/b44ff627-61dc-4581-b793-258c26662c8b" />
+
 
 ## 1. Thông tin trạng thái dự án
 - Trạng thái: Ongoing (Đang trong quá trình phát triển). Tác giả chưa có đủ tiền để tiếp tục dự án.
