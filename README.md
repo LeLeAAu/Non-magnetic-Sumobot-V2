@@ -205,12 +205,12 @@ Dự án tập trung vào việc kết hợp giữa Thiết kế cơ khí bất 
 
 # IV. Thiết kế Cơ khí & Chiến lược Trọng lượng
 Tổng hợp khối lượng của các linh kiện kỹ thuật cốt lõi:
-●	Động cơ Worm Gear (x2): 710g
-●	Khung PETG: 230g
-●	Pin 3S 1500mAh: 150g
-●	Bánh xe (x2): 60g
-●	Driver động cơ BTS7960 (x2): 40g
-●	Vi điều khiển ESP32, Mạch giảm áp, Cảm biến, Tụ điện, Điện trở: ~66g
+- Động cơ Worm Gear (x2): 710g
+- Khung PETG: 230g
+- Pin 3S 1500mAh: 150g
+- Bánh xe (x2): 60g
+- Driver động cơ BTS7960 (x2): 40g
+- Vi điều khiển ESP32, Mạch giảm áp, Cảm biến, Tụ điện, Điện trở: ~66g
 Tổng khối lượng kỹ thuật cơ bản: ~1256g
 
 Luật giải đấu cho phép trọng lượng tối đa lên tới 1.5kg (1500g). Theo tư duy cơ khí thông thường, đội phát triển nên gắn thêm khoảng 244g chì hoặc thép đặc vào gầm xe để tối đa hóa lực ma sát (tăng F). Tuy nhiên, lý do tại sao dự án này quyết định thay thế phần trọng lượng dư thừa bằng các chi tiết trang trí (Deco) thay vì tạ dựa trên hai luận điểm phân tích:
