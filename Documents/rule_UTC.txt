@@ -1,0 +1,36 @@
+Luật:
+📌 1. Hình thức thi đấu
+Thi đấu giữa hai đội mỗi trận gồm 3 hiệp (mỗi hiệp 3 phút).
+Đội thắng là đội có tổng điểm nhiều hơn sau các hiệp đấu.
+Có thể có hiệp phụ nếu hòa.
+📌 2. Đội thi
+Tối đa 5 thành viên/đội, phải có ít nhất 1 sinh viên ngành Kỹ thuật Cơ khí hoặc Cơ điện tử của trường.
+📌 3. Sàn thi đấu
+Hình tròn, đường kính 100 cm, viền trắng 5 cm.
+Có hai vạch khởi động cách nhau 20 cm.
+📌 4. Quy định về Robot
+Kích thước: tối đa 15cm x 15cm, không giới hạn chiều cao.
+Trọng lượng: ≤ 1.5kg.
+Robot phải tự động hoàn toàn, cấm giao tiếp không dây trong thi đấu.
+Phải có đoạn chương trình chờ 3 giây trước khi bắt đầu di chuyển.
+Không được gây nhiễu, làm hư hỏng sàn đấu, sử dụng chất lỏng, chất dính, hóa chất, thiết bị ném/bắn.
+📌 5. Cách tính điểm thắng
+Robot đẩy được đối thủ ra ngoài hoặc làm đối thủ lật ngã là thắng hiệp.
+Nếu cả hai robot rơi khỏi sàn, robot rơi sau sẽ thắng.
+Nếu không phân thắng bại, đấu thêm hiệp phụ, nếu vẫn hòa sẽ bốc thăm.
+📌 6. Lỗi vi phạm
+Vi phạm về robot: thua trận, đối thủ được +2 điểm.
+Lỗi vô văn hoá: bị loại khỏi giải.
+Lỗi thi đấu: bị cảnh cáo, xử thua hiệp hoặc trận tùy số lần vi phạm.
+📌 7. Khiếu nại và trọng tài
+Đội trưởng được phép khiếu nại trước hoặc sau hiệp đấu.
+Trọng tài có quyết định cuối cùng.
+*** Lưu ý ***
+Trong các trận đấu thường, vị trí đặt bot của mình và đối thủ sẽ do trọng tài chọn
+- Mặt trước đối mặt trước
+- Mặt bên đối mặt bên
+- Mặt sau đối mặt sau
+- Mặt 45 độ đối mặt - 45 độ …
+Trận đấu bán kết – chung kết sẽ được chọn vị trí đặt bot.
+
+Sàn đấu là sàn không có kim loại, không thể thêm nam châm vào bot

@@ -1,0 +1,577 @@
+// IMPORTANT!!!: Thông tin sau chỉ áp dụng cho đối thủ ở trường UTC
+// Hiếm không đồng nghĩa với tốt
+// Ở UTC thì ngay cả Rare hoặc Epic đã là gần như chỉ 1% dùng r
+I. Tổng quan về thiết kế đối thủ 
+	- Đa số đối thủ trong các trận Sumo Robot thường sử dụng thiết kế tương đối truyền thống, tập trung vào hiệu quả thực chiến hơn là thuật toán phức tạp. Phần lớn chiến thuật của họ dựa vào phát hiện đối thủ phía trước và đẩy trực diện ra khỏi sân.
+
+	- Thiết kế cơ bản thường gồm:
+		+ Khung robot thấp để tăng ổn định
+		+ Phần trước được gia cố để chịu va chạm
+		+ Trọng tâm dồn về phía trước để tăng lực đẩy
+		+ Phần sau thường ít được bảo vệ hơn
+		+ Điều này tạo ra các điểm yếu phổ biến ở hai bên và phía sau robot.
+		
+// IMPORTANT!!!: Thông tin sau chỉ áp dụng cho đối thủ ở trường UTC
+// Hiếm không đồng nghĩa với tốt
+
+II. Hệ thống Cảm biến khoảng cách (Tầm nhìn của đối thủ)
+
+    1. Nhóm Cảm Biến Siêu Âm - Ultrasonic
+        Các mã phổ biến: 
+			HC-SR04, 
+			SRF05, 
+			FRS04, 
+			HC-SR05, 
+			JSN-SR04T, 
+			AJ-SR04M...
+        Độ hiếm: 
+			Common (Tràn lan, gặp ở 80% bot sinh viên)
+        Đặc điểm:
+            Giá cực rẻ, nhắm mắt cũng mua được.
+            Góc quét hình nón khá rộng, dễ dò trúng đối thủ to xác.
+            Dễ dùng, cắm là chạy.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Tốc độ cập nhật bị giới hạn bởi vận tốc âm thanh. Nếu xe đối thủ lao quá nhanh, dữ liệu đo được sẽ bị sai lệch.
+            Có "Blind zone" (vùng mù) ở khoảng cách sát ván. Khi hai xe đã áp sát cắn nhau, siêu âm bị mù hoàn toàn.
+            Bị ảnh hưởng bởi góc phản xạ: Nếu xe của bạn có thiết kế vát nghiêng, sóng âm của địch sẽ bị dội lên trời thay vì dội về cảm biến -> Đối thủ sẽ không nhìn thấy bạn.
+            Rất dễ bị nhiễu do rung động cơ khí hoặc tiếng ồn tạp âm từ motor.
+
+    2. Nhóm Cảm Biến Quang Học ToF (Time of Flight)
+        Các mã phổ biến: 
+			VL53L0X, 
+			VL53L0XV2, 
+			VL53L5X, 
+			TOF10120, 
+			TOF0400F...
+        Độ hiếm: 
+			Uncommon -> Rare (Tùy mức độ chịu chơi)
+        Đặc điểm:
+            Sử dụng tia Laser đo thời gian bay của hạt photon.
+            Độ chính xác đo lường cực cao (chuẩn milimet).
+            Tốc độ phản hồi nhanh, ít bị nhiễu bởi âm thanh môi trường như dòng Ultrasonic.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Giao tiếp I2C rất dễ bị "treo" (treo I2C là treo luôn vi điều khiển).
+            Góc quét dạng tia (Beam) rất hẹp. Nếu bot địch xoay xe quá nhanh, tia ToF có thể quét trượt qua khoảng trống của xe bạn.
+            Tia laser dễ bị "mù" tạm thời nếu bị nhiễu bởi nguồn ánh sáng cực mạnh chiếu thẳng vào (rất rủi ro nếu sân đấu có đèn cao áp).
+            Chi phí đắt đỏ.
+
+    3. Nhóm Cảm Biến Hồng Ngoại Quang Điện
+        Các mã phổ biến: 
+			GP2Y0A02YK0F (Sharp), 
+			E18-DNK80...
+        Độ hiếm: Uncommon 
+        Đặc điểm:
+            Tốc độ phản hồi nhanh như chớp.
+            Không cần băm xung trigger như siêu âm, đẩy thẳng tín hiệu Analog hoặc Digital về chân vi điều khiển xử lý cực lẹ.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Tín hiệu Analog trả về không tuyến tính (đồ thị cong parabol), yêu cầu đối thủ phải nội suy code tốt.
+            Nhiễu điện (Noise) trả về rất cao nếu mạch nguồn (Power system) của đối thủ thiết kế lọc không sạch.
+            Phụ thuộc vào màu sắc và vật liệu. Tia hồng ngoại bị hấp thụ mạnh bởi màu đen. Nếu xe bạn sơn đen nhám toàn thân, tầm nhìn của các cảm biến này trên xe địch sẽ bị suy giảm thê thảm (có thể giảm tới 50% khoảng cách phát hiện).
+
+    4. Nhóm Cảm Biến Tiêu Chuẩn Công Nghiệp
+        Các mã phổ biến: 
+			CDD-40N, 
+			E3F-20C1, 
+			RCWL1601...
+        Độ hiếm: Mythic (~0% sử dụng, trường UTC chưa thấy pháp sư nào mang vào)
+        Đặc điểm:
+            Độ tin cậy tuyệt đối, sinh ra để chạy trong nhà máy.
+            Phát hiện cực kỳ ổn định, gần như miễn nhiễm với các loại nhiễu thông thường ở sân chơi sinh viên.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Kích thước khổng lồ và cực kỳ nặng -> Tạ team theo nghĩa đen, phá hỏng trọng tâm (Center of Gravity) của bot, khiến bot dễ bị bốc đầu hoặc mất cân bằng khi rẽ.
+            Ăn dòng lớn, tiêu hao năng lượng cao gây áp lực lên pin.
+            Overkill với một sân chơi tốc độ cao cần sự linh hoạt.
+
+III. Bố trí cảm biến phát hiện đối thủ (Sensor Layout & Blind Spots)
+
+    1. Layout "Tự Hủy" (0°)
+        Độ hiếm: 
+			Common (Thường gặp ở các mầm non năm nhất đi thi cho có phong trào)
+        Đặc điểm:
+            Duy nhất 1 cảm biến chĩa thẳng về phía trước (0°).
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Góc nhìn cực hẹp
+            Cách diệt: Chỉ cần xe bạn lách nhẹ sang một bên hoặc vòng ra sau lưng, bot địch sẽ tự nhiên biến thành một cục gạch phế thải.
+
+    2. Layout Tối Giản (0°, 180°)
+        Độ hiếm: 
+			Common (Nâng cấp nhẹ của đội năm nhất)
+        Đặc điểm:
+            Có khả năng nhìn trước và sau.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Hai bên sườn hoàn toàn mù.
+			
+    3. Layout Phổ Thông / Mũi Giáo (0°, 45°, -45°)
+        Độ hiếm: 
+			Uncommon (Layout tiêu chuẩn của đa số sinh viên)
+        Đặc điểm:
+            Quét mặt trước rất tốt, bao phủ được các góc vát chéo, chống bị tạt sườn trực diện.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Tử huyệt nằm ở nửa bán cầu sau (từ 90° vòng qua 180° đến -90°)
+
+    4. Layout Phổ Thông Plus (0°, 45°, -45°, 180°)
+        Độ hiếm: 
+			Uncommon
+        Đặc điểm:
+            Giữ được lợi thế càn quét mặt trước của layout 3, đồng thời vá được lỗ hổng chết người ở chính diện phía sau.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Vẫn hở sườn ngang (90° và -90°).
+
+    5. Layout Tứ Tượng / Mở Rộng (0°, 90°, -90°, 180°)
+        Độ hiếm: Rare
+        Đặc điểm:
+            Phủ sóng cả 4 hướng cơ bản. Khá toàn diện trên lý thuyết.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Thực tế thực chiến: Thuật toán (FSM) của sinh viên thường không đủ tinh vi để xử lý mượt mà cả 4 tín hiệu cùng lúc. Sinh viên thường viết code ưu tiên (if-else) lệnh lao tới trước, dẫn đến việc bot phản ứng cực kỳ lóng ngóng nếu bị tấn công từ 2 hướng.
+            Tử huyệt mới xuất hiện ở các góc chéo (45°, 135°, -45°, -135°). Nếu lao chéo vào giữa 2 cảm biến, bot địch sẽ bị "lag" nhận diện.
+
+    // CÁC LAYOUT TẦM NHÌN NÂNG CAO
+    // Nếu gặp đối thủ xài form này, chuẩn bị tinh thần đánh một trận khô máu.
+	
+    6. Bán Nguyệt Phía Trước (0°, ±45°, ±90°)
+		Độ hiếm:
+			Mythic
+        Ý nghĩa chiến thuật:
+            Phòng thủ tuyệt đối nửa bán cầu trước. 
+			Khóa chặt mọi nỗ lực tạt sườn của đối phương.
+
+    7. Chéo Tử Huyệt X-Shape (±45°, ±135°)
+		Độ hiếm:
+			Epic
+        Ý nghĩa chiến thuật:
+            Bỏ qua trục dọc/ngang truyền thống. 
+			Sinh ra dành cho những con bot có khả năng xoay tại chỗ (Spin/Pivot) cực gắt.
+			Cực kỳ khó chịu và khó bị bắt bài.
+
+    8. Tụ Tiêu Front-Heavy (0°, ±15°, ±30°)
+        Ý nghĩa chiến thuật:
+            Từ bỏ tầm nhìn hai bên, dồn 100% hỏa lực radar về phía mũi xe.
+            Layout này thường đi kèm thuật toán bám mục tiêu (Tracking) siêu việt. 
+			Đối thủ muốn biến xe của họ thành một quả tên lửa tầm nhiệt.
+			Thường ứng dụng cho bot thiết kế nhọn.
+
+    9. Lốc Xoáy Front-Heavy-Max (0°, ±10°, ±20°, ±30°)
+        Ý nghĩa chiến thuật:
+            Biến thể cực đoan nhất của Tụ Tiêu. 
+			Quét siêu nhuyễn mặt trước để đảm bảo vị trí tương đối của xe bạn luôn nằm ở chính giữa gầm xúc của xe địch. 
+			Đối thủ chơi layout này chắc chắn code FSM và PID cực kỳ cứng tay để tối ưu hóa góc đâm. 
+			Tránh đối đầu trực diện bằng mọi giá.
+			
+		
+		
+IV. Hệ thống Cảm biến biên - Edge Detection (Phanh khẩn cấp chống rớt đài)
+
+    1. Các dòng Cảm Biến Dò Lai
+        Nhóm Phổ Thông (TCRT5000):
+            Độ hiếm: 
+				Common
+            Đặc điểm: 
+				Module to, cồng kềnh, dễ lắp.
+            Điểm yếu chí mạng: 
+				Cực kỳ nhạy cảm với ánh sáng môi trường.
+        Nhóm Tầm Trung (ST188, QRD1114, RPR-220, CNY70):
+            Độ hiếm: 
+				Uncommon.
+            Đặc điểm: 
+				Nhỏ gọn hơn 
+				Dòng xả và độ nhạy tốt hơn TCRT5000 một chút
+				Thường được sinh viên tự vẽ mạch in (PCB) tích hợp thẳng xuống gầm xe để tiết kiệm diện tích.
+        Nhóm Cao Cấp (QTR-1A của Pololu):
+            Độ hiếm: 
+				Epic.
+            Đặc điểm: 
+				Hàng tuyển
+				Siêu nhỏ
+				Tốc độ phản hồi cực nhanh, chống nhiễu ánh sáng tốt. 
+				Sinh ra cho các giải đấu tốc độ cao.
+
+    2. Bố trí Cảm Biến Biên (Edge Sensor Layout)
+
+        Layout Đơn Trước (1x Front)
+            Độ hiếm: 
+				Common (Layout "ngây thơ" nhất).
+            Ý nghĩa chiến thuật: 
+				Chỉ dò được vạch trắng ngay giữa mũi xe.
+            Điểm yếu chí mạng: 
+                Nếu xe đang lùi hoặc bị địch móc lốp đẩy từ phía sau, bot sẽ rơi khỏi sân mà không hề có sức kháng cự.
+                Nếu đâm chéo góc, bánh xe có thể đã văng ra ngoài trước khi cảm biến ở giữa kịp nhận diện vạch trắng.
+
+        Layout Kép Dọc (1x Front + 1x Behind)
+            Độ hiếm: 
+				Uncommon.
+            Ý nghĩa chiến thuật: 
+				Vá lỗi của Layout Đơn Trước 
+				An toàn hơn rất nhiều khi bị đối thủ húc đẩy lùi hoặc khi tự code hàm lùi né đòn.
+            Điểm yếu chí mạng: 
+				Hai bên hông bánh xe vẫn là góc chết. 
+				Nếu địch tạt sườn (húc ngang 90 độ), xe bạn bị trượt ngang ra khỏi sân thì hệ thống này cũng hoàn toàn vô dụng.
+
+        Layout Kép Góc (1x Front Left + 1x Front Right)
+            Độ hiếm: 
+				Common (Meta hiện tại của giải, phổ biến nhất).
+            Ý nghĩa chiến thuật: 
+                Đặt ở 2 góc mũi xe. 
+				Cực kỳ hiệu quả khi bot chủ động tấn công lệch góc hoặc ôm cua. 
+                Khi 1 trong 2 cảm biến chạm vạch, vi điều khiển có thể điều khiển xe quay đầu (Pivot) ngược lại để thoát hiểm vào trong tâm sân.
+            Điểm yếu chí mạng: 
+				Vẫn là tử huyệt phía sau. Đang lùi là tèo.
+
+        Layout Tứ Trụ Bốn Góc (1x Front Left + 1x Front Right + 1x Behind Left + 1x Behind Right)
+            Độ hiếm: 
+				Epic.
+            Ý nghĩa chiến thuật:
+                Pháo đài bất tử (Về mặt lý thuyết). 
+				Gần như an toàn tuyệt đối bất kể bị đẩy từ hướng nào hay xoay xe ở góc độ nào.
+            Điểm yếu chí mạng & Rủi ro thi công:
+                Tốn tận 4 chân Digital (hoặc Analog) của vi điều khiển, làm rắc rối sơ đồ đi dây.
+                Yêu cầu khả năng lập trình FSM (Finite State Machine) tốt. Nếu code không xử lý khéo các hàm ngắt (Interrupt) hoặc Delay, khi 2 cảm biến cùng báo tín hiệu, xe sẽ bị "tăng động" (liên tục tiến lùi giật cục) ngay tại mép sân, tạo cơ hội vàng cho đối thủ lao tới dứt điểm.
+		
+V. Vi điều khiển (Bộ não / MCU của đối thủ)
+
+    1. Nhóm Arduino
+        Các mã phổ biến: 
+			Arduino Uno R3 (Common)
+			Arduino Uno R4 Minima (Rare)
+			Arduino Nano (Uncommon)
+			Arduino Pro Mini (Rare)
+			SAMD21 M0 / M0 Mini	(Epic)
+
+        Đặc điểm:
+            Tài liệu ngập tràn, thư viện sẵn có, cực kỳ dễ lập trình cho người mới.
+            Thường chạy các dòng code cơ bản (if-else tuần tự).
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Tốc độ xử lý (đặc biệt là dòng dùng chip AVR cũ như Uno R3/Nano với xung nhịp 16MHz) khá chậm so với tiêu chuẩn chiến đấu thời gian thực.
+            Nếu bot địch nhồi nhét quá nhiều cảm biến mà code không tối ưu, vòng lặp (loop) sẽ bị nghẽn (delay). Điều này dẫn đến độ trễ phản xạ - xe bạn lách qua rồi nhưng nửa giây sau bot địch mới nhận ra và quay xe hụt.
+
+    2. Nhóm ESP
+        Các mã phổ biến: 
+			ESP32-WROOM-32 (Uncommon)
+			ESP32-S3 (Uncommon)
+			ESP32-WROOM-38P (Uncommon)
+			ESP32 CH340 30P	(Uncommon)
+        Đặc điểm:
+            Xung nhịp cực khủng (lên tới 240MHz), kiến trúc đa nhân (Multi-core).
+            Hoàn toàn dư sức chạy các cỗ máy trạng thái (FSM - Finite State Machine) phức tạp hoặc thuật toán PID bám đuổi mượt mà.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Quá dư thừa (Overkill) nếu chỉ code kiểu "tuần tự" thông thường.
+            Mức logic 3.3V của ESP khá nhạy cảm với nhiễu điện (noise) từ motor lớn. 
+
+    3. Nhóm RP2040 
+        Các mã phổ biến: 
+			Raspberry Pi Pico (Epic)
+			RP2040 Pro Micro (Epic)
+        Đặc điểm:
+            Kiến trúc ARM Cortex-M0+ lõi kép, tốc độ cao (133MHz), giá thành cực kỳ dễ chịu.
+            Có bộ PIO (Programmable I/O) đỉnh cao giúp đọc cảm biến song song mà không vướng CPU.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Hệ sinh thái thư viện cho Sumo Bot chưa "mì ăn liền" như Arduino.
+			Hầu như rất ít sinh viên khai thác được dù chỉ 30% sức mạnh của con chip này.
+			Nếu gặp, khả năng cao là đối thủ đang dùng nó như một con Arduino Nano đắt tiền.
+
+    4. Nhóm MCU Kiến Trúc ARM / Chuyên Dụng 
+        Các mã phổ biến: 
+		STM32G431CBU6 (Legendary)
+		STM32F103C8T6 (Epic)
+		STM32F411 Black Pill (Epic)
+		STC32G12K128 (Legendary)
+		CH32V307VCT6 (Legendary)
+        Đặc điểm & Lợi thế chiến thuật:
+            Sức mạnh của nhóm này, đặc biệt là dòng STM32, nằm ở hệ thống ngắt (Interrupt), DMA và Timer phần cứng cực kỳ mạnh mẽ. Nhóm này có thể đọc hàng tá cảm biến và điều khiển motor mượt mà với độ trễ gần như bằng 0.
+            Tuy nhiên, đường cong học tập cực kỳ gắt. 
+			Ai dám vác một board STM32 vào sàn đấu thì chắc chắn họ hiểu rất rõ về thanh ghi, kiến trúc phần cứng và làm chủ hoàn toàn được FSM của mình. 
+			Đây là đối thủ "cứng cựa" thực sự về mặt logic.
+
+    5. Nhóm Quái Vật Tính Toán
+        Các mã phổ biến: 
+			Teensy 4.0 (God-tier)
+			Teensy 4.1 (God-tier)
+        Đặc điểm:
+            Sở hữu xung nhịp khủng khiếp (lên tới 600MHz), con MCU này mạnh ngang một chiếc máy tính đời cũ.
+        Điểm yếu chí mạng:
+            Hoàn toàn lãng phí tiền bạc và tài nguyên cho bài toán Sumo Bot thông thường. Nếu có ai đem board mạch cả triệu bạc này vào sân cho xe tông nhau, thì khả năng cao đó là một "tay to" tài phiệt hoặc họ lười tháo mạch từ đồ án tốt nghiệp ra.
+		
+VI. Hệ thống truyền động (Drivetrain / Khung gầm di chuyển)
+
+    1. Cấu hình Standard (2 Bánh - 2 Động cơ)
+        Độ hiếm: 
+			Common (Cấu hình quốc dân, phổ biến nhất).
+        Đặc điểm:
+            Mỗi bên hông dùng 1 motor kéo trực tiếp 1 bánh xe (Direct Drive).
+            Cực kỳ linh hoạt, tốc độ bứt tốc nhanh.
+            Khả năng xoay tại chỗ (Pivot/Spin turn) mượt mà với bán kính quay vòng (Turning radius) gần như bằng không.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Độ bám đường (Grip) phụ thuộc hoàn toàn vào 2 diện tích tiếp xúc rất nhỏ của lốp.
+            Bài toán động lực học cơ bản: Trọng tâm (Center of Gravity - CG) phải đặt chuẩn ngay trên trục bánh xe. Nếu đầu xe quá nặng, đuôi bị nhẹ (hoặc ngược lại), khi hai xe lao vào húc nhau, lực đòn bẩy sẽ nhấc bổng bánh xe lên khỏi mặt sàn -> Mất hoàn toàn ma sát tĩnh (Static friction), bánh xe quay tít trên không và xe bị đẩy lùi dễ dàng.
+            Rất dễ bị lật hoặc mất thăng bằng nếu bị tạt sườn mạnh.
+
+    2. Cấu hình Alternative / Skid-Steer (4 Bánh - 2 Động cơ)
+        Độ hiếm: Uncommon.
+        Đặc điểm:
+            Dùng 2 motor truyền động đai (Belt) hoặc bánh răng (Gear) để kéo đồng thời 4 bánh.
+            Độ ổn định (Stability) tuyệt vời. Trọng lượng phân bổ đều lên 4 điểm tiếp xúc, bám sàn (Grip) cực tốt.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Ma sát ngang (Lateral friction) của 4 bánh khi chuyển hướng là cực kỳ lớn. Chuyển động xoay (Turning) vô cùng nặng nề, chậm chạp và "nhai" một dòng điện khổng lồ từ pin.
+            Gặp đối thủ đi cấu hình này, tuyệt đối không đấu đầu trực diện.
+
+    3. Cấu hình Track System (Bánh xích - Tank Track + 2 Động cơ)
+        Độ hiếm: Rare (Trông thì ngầu nhưng ít ai dám dùng thực chiến).
+        Đặc điểm:
+            Diện tích tiếp xúc với mặt sàn là lớn nhất -> Lực ma sát tĩnh gần như đạt ngưỡng tối đa. Một khi nó đã bám sàn thì đẩy nó giống như đẩy một tảng đá.
+        Điểm yếu chí mạng & Khai thác chiến thuật:
+            Tốc độ di chuyển rùa bò do tổn hao động năng qua hệ thống xích và nhông là rất lớn.
+            Tiêu thụ điện năng (Power consumption) khủng khiếp, mau cạn pin và dễ làm cháy motor nếu bị kẹt.
+            Tử huyệt cơ khí: Dây xích cao su hoặc nhựa in 3D thường có độ rơ lỏng. Nếu bot của bạn có mũi xúc (Wedge) vát nhọn, chỉ cần húc xéo vào hông hoặc tông trúng cụm bánh tỳ, xích của địch sẽ tuột ra ngoài hoặc đứt lìa. Khi đó, cỗ xe tăng bất khả chiến bại lập tức biến thành một cục sắt vụn nằm bất động.
+
+VII. Phân loại chiến thuật thi đấu
+
+    1. Lấy thịt đè người đơn giản - Tanker
+        Độ hiếm: 
+			Common (Gặp nhan nhản)
+        Đặc điểm & Trang bị:
+            Sử dụng motor có lực kéo (Torque) cực lớn, chấp nhận hy sinh tốc độ di chuyển.
+            occho logic: thấy làm đâm
+        Chiến thuật (FSM): Scan (Dò) -> Detect (Thấy) -> Rush forward (Cắm đầu chạy) -> Push (Ủi tới chết).
+        Điểm yếu chí mạng & Khai thác:
+            Sự lù đù: Gia tốc góc rất thấp, quay đầu cực kỳ chậm chạp.
+            Tử huyệt tạt sườn: Rất dễ bị Flanker hoặc Speeder móc lốp (Rear attack) hoặc đánh ngang hông (Side attack). Một khi bị đẩy ngang, lực Torque của Tanker hoàn toàn vô dụng.
+
+    2. Tốc độ bù đắp đơn giản - Speeder
+        Độ hiếm: 
+			Common (Tầng lớp tiến hóa từ Tanker)
+        Đặc điểm & Trang bị:
+            Ưu tiên motor vòng tua cao, Torque vừa phải.
+            Code FSM được chăm chút hơn, biết tính toán góc tiếp cận.
+        Chiến thuật (FSM): Scan (Quét diện rộng) -> Align (Gióng trục/Khóa mục tiêu) -> Attack (Bứt tốc đâm sầm vào địch).
+        Điểm yếu chí mạng & Khai thác:
+            Độ bám đường (Stability) kém do xe thường nhẹ để tối ưu gia tốc.
+            Quán tính quá lớn: Nếu đâm trượt, xe rất dễ bị trượt bánh (drift) mất kiểm soát. 
+			Đặc biệt nếu đâm vào tường hoặc bị The Anvil chặn lại, Speeder sẽ tự nảy ngược ra sau và tự làm choáng  chính bộ vi điều khiển của mình.
+
+    3. Lưỡi ủi chúa - Wedge_Lord
+        Độ hiếm: 
+			Uncommon (Bắt đầu đòi hỏi trình độ gia công cơ khí chính xác)
+        Đặc điểm & Trang bị:
+            Trọng tâm (Center of Gravity) ép sát rịt mặt đất.
+            Vũ khí tối thượng: Lưỡi ủi thiết kế góc vát siêu mỏng, mài sắc.
+        Chiến thuật:
+            Bỏ qua mọi đòn tấn công trực diện của Tanker. 
+			Khi hai xe va chạm, lưỡi ủi sẽ tự động luồn dưới bụng địch -> Dồn full 100% PWM ép đối thủ kênh bánh lên không trung (mất hoàn toàn ma sát) rồi ủi bay ra ngoài.
+        Điểm yếu chí mạng & Khai thác:
+            Kẻ thù tự nhiên: Mặt sàn thi đấu tại UTC. Nếu sàn bị xước, mấp mô hoặc ghép nối không phẳng, Wedge_Lord sẽ tự cày mặt sàn và kẹt cứng lại (tự phế).
+            Dễ bị khắc chế cứng bởi chiến thuật né ngang tạt sườn. Lưỡi ủi chỉ có tác dụng ở mặt trước.
+
+    4. Vua thí tốt - Edge_Camper (Đấu sĩ Matador)
+        Độ hiếm: Mythic (Yêu cầu tư duy vật lý dị biệt)
+        Đặc điểm & Trang bị:
+            Cảm biến biên cực kỳ nhạy, căn chỉnh chuẩn milimet.
+            Hệ truyền động đặc thù: Dùng trục vít bánh vít (Worm gear) có khả năng tự khóa cơ khí chống trôi, hoặc motor có phanh điện từ cực mạnh.
+        Chiến thuật:
+            Vừa vào trận, lập tức lùi thẳng ra mép Dohyo, đỗ cách vạch trắng đúng 1mm rồi phanh chết cứng (Camper).
+            Nhử Tanker lao tới. 
+			Ngay khoảnh khắc va chạm -> Xả ga một bánh tiến, một bánh lùi -> Lợi dụng chính động năng đâm của địch cộng hưởng với lực xoay của mình để tạo ra một pha "vật ruy băng" (Moment xoay). 
+			Tanker đang lao nhanh sẽ bị văng ra ngoài bởi lực ly tâm, còn Edge_Camper xoay vòng ngay sát mép vực nhưng vẫn sống sót.
+
+    5. Hệ "Bức tường thép" - The Anvil
+        Độ hiếm: 
+			Rare (Trường phái phòng ngự phản công)
+        Đặc điểm & Trang bị:
+            Động cơ có tính năng tự hãm (Brake) cực mạnh.
+            Lốp xe đúc từ silicon hoặc cao su non siêu bám đường (Max grip).
+        Chiến thuật:
+            Bò chậm rãi, gầm hạ sát. 
+            Khi cảm biến phát hiện địch lao tới húc -> Lập tức khóa cứng 2 bánh. 
+			Đối thủ húc vào một khối rubik bất động sẽ phải chịu toàn bộ phản lực (va chạm đàn hồi) -> Nảy lùi và mất ma sát tĩnh.
+            Ngay khoảnh khắc địch bị nảy lên -> Xả full ga húc nhồi chí mạng (Counter-attack).
+
+    6. Kẻ đâm sườn - Flanker
+        Độ hiếm: 
+			Epic (Đòi hỏi thuật toán xịn)
+        Đặc điểm & Trang bị:
+            Tốc độ tuyến tính trung bình nhưng Vận tốc góc (tốc độ quay quanh trục - Yaw rate) cực kỳ nhanh.
+            Dùng layout cảm biến Tụ tiêu, X-shape hoặc bố trí ma trận dọc sườn.
+        Chiến thuật:
+            Thuật toán FSM tuyệt đối từ chối các pha va chạm 0 độ (đấu đầu).
+            Ngay khi dò thấy địch ở hướng chính diện -> Khóa 1 bánh, lùi 1 bánh dứt khoát để né quỹ đạo đâm thẳng -> Bo một đường cong hoàn hảo cắm ngập mũi xe vào điểm mù bên sườn của địch.
+
+    7. Kẻ giăng bẫy - Baiter
+        Độ hiếm: 
+			Legendary (Cần master cả cơ khí lẫn thuật toán bám đuổi)
+        Đặc điểm & Trang bị:
+            Gia tốc lùi (Reverse acceleration) tàn bạo.
+            Chạy thuật toán tính toán động học, đo vận tốc và gia tốc của đối thủ theo thời gian thực (thông qua mảng cảm biến hoặc ToF).
+        Chiến thuật:
+            Cố tình chạy loăng quăng, chìa hông hoặc quay lưng lại để "mời" địch cắn.
+            Đọc được thời điểm đối thủ nhồi max ga (PWM 255) không thể phanh lại -> Đột ngột giật lùi tốc độ cao hoặc lách ngang quỹ đạo (side-step).
+            Hậu quả: Địch húc thẳng vào khoảng không, mang theo toàn bộ động năng quán tính bay tọt ra ngoài sàn đấu mà The Baiter không cần tốn một giọt mồ hôi.
+				
+VIII. Động Cơ (Cơ Bắp / Lực Đẩy của đối thủ)
+
+    1. Dòng Medium Torque (Tiêu chuẩn hạng trung)
+        Mã phổ biến: 
+			32GP-31ZY (12V)
+        Độ hiếm: 
+			Common
+        Thông số chiến đấu:
+            Tốc độ không tải (No Load): 160 RPM | Dòng: 0.45A
+            Tải định mức (Rated): 130 RPM | Torque: 7 kg.cm | Dòng: 1.8A
+            Ghì tải (Stall): Torque bứt phá lên 23 kg.cm | Dòng ăn tới 5A/motor.
+        Ý nghĩa chiến thuật & Khai thác:
+            Sự cân bằng hoàn hảo giữa tốc độ (130 RPM) và sức đẩy. Phù hợp cho cả Tanker lẫn Speeder.
+            Điểm yếu chí mạng: 
+				Dòng Stall là 5A. 
+				Nếu bot đối thủ xài cấu hình 2 motor, khi hai xe húc nhau kẹt cứng, hệ thống sẽ rút 10A từ pin. 
+				Lắp pin Li-ion "phèn" hoặc dùng L298N thì hệ thống sẽ tự sập nguồn hoặc cháy driver ngay lập tức.
+
+    2. Dòng Trục Vít Bánh Vít (Worm Gear)
+        Mã phổ biến: 
+			JGY-370 series (Bản 24V)
+        Độ hiếm: 
+			Uncommon 
+        Thông số chiến đấu:
+            Variant 1 (Tốc độ): Rated 100 RPM | Torque: 2.6 kg.cm | Stall: 10 kg.cm (Dòng cực thấp: 1.6A).
+            Variant 2 (Sức kéo): Rated 80 RPM | Torque: 3.5 kg.cm | Stall: 13 kg.cm.
+        Ý nghĩa chiến thuật & Khai thác:
+            Trục vít có tính năng "Tự khóa cơ khí" (Self-locking).
+			Bất khả thi để đẩy lùi một con bot dùng JGY-370 nếu bánh xe nó còn độ bám.
+            Điểm yếu chí mạng: 
+				Torque thực tế khá đuối và tốc độ (80-100 RPM) là quá rùa bò. 
+
+    3. Dòng Nồi Đồng Cối Đá
+        Mã phổ biến: 
+			JGB37-3530 (Bản 24V)
+        Độ hiếm: 
+			Uncommon
+        Thông số chiến đấu:
+            Rated: 85 RPM | Torque: 5.8 kg.cm
+            Ghì tải (Stall): Torque khủng 23.2 kg.cm
+        Ý nghĩa chiến thuật & Khai thác:
+            Đây là con motor sinh ra để cày bừa. 
+			Tốc độ chậm nhưng lực đẩy cực kỳ lầm lì. Một Tanker đích thực.
+            Vì chạy 24V nên nó ép đối thủ phải mang theo khối pin 6S to nặng, làm giảm độ linh hoạt của khung gầm.
+
+    4. Dòng Giảm Tốc Hành Tinh (Planetary Gearbox)
+        Mã phổ biến: 
+			36GP-3650
+        Độ hiếm: 
+			Epic (Đội nào xài dòng này là có đầu tư cơ khí bài bản)
+        Thông số chiến đấu:
+            Variant 1 (Cân bằng): Rated 140 RPM | Torque: 7.8 kg.cm | Stall: 18 kg.cm.
+            Variant 2 (Bạo lực): Rated 90 RPM | Torque: 11.1 kg.cm | Stall: 25.2 kg.cm.
+        Đặc điểm & Lợi thế:
+            Hộp số hành tinh (Planetary) chịu lực va đập cực tốt, gần như không bao giờ bị mẻ bánh răng khi hai xe tông nhau ở tốc độ cao. 
+			Lực Torque định mức lên tới 11.1 kg.cm khiến nó đẩy mọi đối thủ văng ra khỏi sàn một cách phũ phàng.
+        Điểm yếu chí mạng & Khai thác:
+            Torque cao nhưng tốc độ tối đa quá thấp. 
+
+    5. Dòng High-End (Đẳng cấp thần thánh / Out trình)
+        Mã phổ biến: 
+			MAXON RE35
+			PG36-550
+        Độ hiếm: 
+			Mythic (~0% dùng)
+        Ý nghĩa chiến thuật:
+            MAXON là motor dùng trong hàng không vũ trụ và robot công nghiệp hạng nặng. Giá một củ MAXON RE35 có thể bằng tiền cả cái laptop. Nếu ai đó vác nó vào sân, họ là tài phiệt hoặc cầm nhầm đồ án của giáo sư đi thi.
+            PG36-550: Dòng motor 550 kéo dòng xả khổng lồ (Stall có thể lên vài chục Ampe). Nếu địch xài con này mà mạch nguồn không bọc tản nhiệt nhôm cỡ đại, xe của chúng sẽ bốc khói trước khi kịp chạm vào bạn.
+	
+	
+IX. Driver motor phổ biến
+	1. Nhóm Cổ Điển
+		L298N (Uncommon):
+			Rẻ, cực kỳ phổ biến.
+			Dễ dùng, dễ mua.
+			Efficiency rất thấp (công nghệ BJT cũ).
+			Sụt áp lớn (tới 2V-3V), gây yếu motor và tỏa nhiệt cực nhiều (cần tản nhiệt nhôm to).
+			Dòng max: 2A/kênh.
+		L293D (Rare):
+			Thường tích hợp trên các khiên (Shield) cắm thẳng vào Arduino Uno.
+			Dòng cực thấp (chỉ 0.6A liên tục).
+			Quá yếu cho Sumo Bot, húc nhau là cháy chip ngay lập tức.
+			Đừng mua nhầm loại này
+
+	2. Nhóm MOSFET Cỡ Nhỏ 
+		TB6612FNG (Uncommon):
+			Là bản thay thế hoàn hảo cho L298N.
+			Công nghệ MOSFET: Hiệu suất cực cao, không bị sụt áp, không cần nhôm tản nhiệt.
+			Kích thước siêu nhỏ (bằng ngón tay).
+			Dòng max: 1.2A liên tục (Peak 3.2A). Phù hợp kéo các motor dòng 370 hoặc N20.
+		DRV8871 (Uncommon):
+			Nhỏ gọn, hiệu suất rất tốt.
+			Có tính năng tự ngắt khi quá dòng (Built-in current sensing).
+			Dòng max: 3.6A peak.
+		MX1508 (Rare):
+			Siêu rẻ, siêu nhỏ.
+			Dành cho các bot sinh viên năm nhất thiết kế module bé. Dòng max 1.5A.
+
+	3. Nhóm Hạng Nặng & Thi Đấu Trọng Điểm (Đối thủ Tanker / Bạo lực)
+		BTS7960 (Common, for some reason):
+			Dòng xả cực lớn (lên tới 43A).
+			Phù hợp cho bot nặng, kéo motor dòng 550, 5840 hoặc 36GP bị ghì tải (Stall).
+			Có khả năng hãm phanh (Brake) cực dính.
+			Kích thước to, tốn diện tích, cần 4 chân PWM/DIR để điều khiển 1 cặp motor.
+		Cytron MDD10A (Legendary):
+			Chịu dòng 10A liên tục (30A peak) cho 2 kênh.
+			Cách điều khiển tối ưu: Chỉ cần 1 chân PWM (Tốc độ) và 1 chân DIR (Hướng) cho mỗi motor.
+			Có nút test cứng (ấn trên mạch để motor chạy không cần code) -> Rất tiện khi debug ở khu vực pit.
+		VNH2SP30 (Mythic):
+			Chịu dòng khủng 30A liên tục.
+			Khả năng chịu sốc điện khi motor bị kẹt (Stall) cực kỳ tốt.
+			Có chân Analog out để vi điều khiển đọc được dòng điện (A) đang tiêu thụ, giúp FSM tự nhận biết lúc nào xe đang húc tường để ngắt chống cháy.
+		
+X. Power system
+    1. Buck converter (Mạch giảm áp):
+        LM2596 (Common):
+            Đặc điểm: 
+				Phổ biến nhất ở giải sinh viên, giá siêu rẻ.
+            Nhược điểm: 
+				To nạc, hiệu suất thấp. Sinh nhiệt rất nhiều nếu phải kéo dòng cao.
+            Điểm yếu chiến thuật: 
+				LM2596 xử lý nhiễu điện áp rất kém. 
+			
+        XL4015 (Uncommon):
+            Đặc điểm: 
+				Chịu dòng cao hơn (5A), thường gắn sẵn nhôm tản nhiệt. Chuyên dùng cho các bot lắp quá nhiều cảm biến.
+        Mini560 (Rare):
+            Đặc điểm: 
+				Kích thước siêu nhỏ gọn, hiệu suất cực cao
+            Ưu thế: 
+				Giữ điện áp logic (3.3V/5V) cứng ngắc, miễn nhiễm với sự sụt áp tàn bạo của động cơ.
+
+    2. Battery (Nguồn cấp):
+        Cấu hình điện áp phổ biến:
+            3S (Common)
+				Chuẩn quốc dân cho các motor 12V.
+            4S (Uncommon):
+				Các Speeder thường dùng mốc này để "ép xung" (overvolt) motor 12V, đánh đổi tuổi thọ lấy tốc độ lốc xoáy.
+            6S (Uncommon):
+				Đặc sản của các Tanker hạng nặng dùng motor 24V. 
+				Lực đẩy cực đoan, nhưng đổi lại hệ thống pin sẽ rất to và nặng.
+			12S / 13S - 48V (Mythic):
+                Độ hiếm: ~0% (Chưa từng có tiền lệ).
+                Đặc điểm:
+                    Mang nguyên cục pin xe đạp điện hoặc e-scooter vào sân.
+                    Mức năng lượng khổng lồ. 
+					Nếu đấu với motor công nghiệp tương thích, sức đẩy của nó có thể húc bay đối thủ văng xuyên qua hàng rào bảo vệ.
+                Lợi thế "Trên giấy":
+                    Nếu dùng để ép xung motor 24V (PWM giới hạn chặt chẽ), tốc độ bứt gia tốc sẽ ở mức "dịch chuyển tức thời". 
+					Động năng tạo ra khi va chạm có thể làm gãy đôi chassis (khung gầm) của đối phương.
+                Điểm yếu chí mạng & Lý do tự hủy:
+                    Tạ team tuyệt đối: Khối pin 48V dung lượng đủ xả sẽ nặng bét nhất cũng 1-2kg, khả năng cao là vi phạm trắng trợn luật giới hạn trọng lượng của giải (1.5kg).
+                    Lò thiêu Driver: Mức áp 48V sẽ nướng chín ngay lập tức mọi thể loại L298N, TB6612, thậm chí cả Cytron 10A hay VNH2SP30. Để chạy được 48V, đối thủ bắt buộc phải dùng VESC (mạch điều khiển xe điện) hoặc driver công nghiệp giá vài triệu đồng.
+                    Bom nổ chậm: Ở mức áp 48V và dòng xả cao, chỉ cần một pha húc nhau làm xước vỏ dây điện chạm ra vỏ nhôm, toàn bộ con bot sẽ biến thành một quả pháo sáng chớp hồ quang (arc flash) nổ tung ngay trên đài.
+        Phân loại công nghệ Pin:
+            18650 Li-ion (Được đối thủ dùng chủ yếu):
+                Đặc điểm: 
+					Rẻ, an toàn, dễ chế cháo bằng box sạc.
+                Điểm yếu chí mạng: 
+					Dòng xả (C-rating) của Li-ion sinh viên thường rất thấp (chỉ khoảng 5A - 10A). 
+					Khi hai motor Tanker của địch lao vào húc nhau và bị ghì lại (Stall state), chúng có thể rút tới 10A dòng điện. 
+					Lúc này, pin Li-ion "phèn" sẽ bị sụt áp đột ngột từ 12V xuống dưới 6V. 
+					Mạch LM2596 không đủ điện đầu vào sẽ làm sập nguồn MCU. 
+					Kết quả: Xe đối thủ tự nhiên đứng im hoặc reset lại từ đầu (chạy lại hàm delay 3s) ngay giữa trận.
+                
+            LiPo - Lithium Polymer (Ít dùng hơn do chi phí, khó sạc & rủi ro cháy nổ safety):
+                Đặc điểm: 
+					Nhẹ, mỏng, và sở hữu Dòng Xả cực kỳ bạo lực (High C-rating). 
+                Lợi thế chiến thuật:
+					Được các tay chơi hiểu biết về điện tin dùng.
+		

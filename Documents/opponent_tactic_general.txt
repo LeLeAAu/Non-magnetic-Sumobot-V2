@@ -1,0 +1,84 @@
+I. Tổng quan đối thủ
+	Phần lớn đối thủ thuộc nhóm Tanker (lực đẩy mạnh, di chuyển chậm), tuy nhiên vẫn tồn tại một số bot có tốc độ cao hơn (Speeder type).
+
+	Đặc điểm chung:
+	- Thường chỉ gia cố phần trước (phần ủi, wedge)
+	- Trọng tâm dồn về phía trước để tối ưu lực đẩy
+	- Các phần còn lại như:
+	  + Bên trái
+	  + Bên phải
+	  + Hai góc sau
+	  + Phía sau	  
+	  thường không được bảo vệ tốt
+	Điều này tạo ra các điểm yếu khi bị tấn công từ:
+	- Hai bên
+	- Phía sau
+	- Góc chéo
+	
+II. Đặc điểm cơ khí và va chạ
+	- Nếu bị đối thủ chui phần ủi vào dưới gầm:
+	  + Khả năng phản công giảm mạnh
+	  + Mất lực đẩy hiệu quả
+
+	- Lực đẩy của tanker thường:
+	  + Rất mạnh
+	  + Tập trung vào pushing power
+	  + Không gây damage quá nhiều (không phải dạng phá hủy)
+
+	- Một số bot không sơn đen hoàn toàn:
+	  + Có thể ảnh hưởng tới khả năng detect của IR sensor
+	  + Có thể tạo lợi thế nếu khai thác đúng
+  
+III. Hệ thống điện và sensor
+	Đặc điểm thường thấy:
+	- Dùng pin điện áp cao (thường là 6S)
+	- Cảm biến khoảng cách rất nhạy
+	- Sensor detect nhanh nhưng logic xử lý thường đơn giản
+
+IV. Chiến thuật phổ biến
+	Các pattern thường gặp:
+
+	1. Random Search Pattern:
+	Robot di chuyển ngẫu nhiên để tìm đối thủ.
+
+	2. Spin Search Pattern:
+	Robot quay vòng tại chỗ:
+	Nếu detect đối thủ:
+	-> Đâm thẳng
+
+	3. Slow Scan Pattern:
+	Robot di chuyển chậm:
+	-> Detect
+	-> Align
+	-> Attack
+
+	Nhận xét:
+	Hầu hết chiến thuật thuộc dạng:
+	Detect → Align → Rush
+
+	Ít có:
+	- Predictive movement
+	- Adaptive strategy
+	- Multi state combat logic
+
+	So funny that:
+	- Một số bot có chiến thuật nâng cao lại có linh kiện đơn giản hoặc không phù hợp dẫn đến thua
+	- Có thể là rất nhiều đối thủ sử dụng delay(3000), nghĩa là không làm một cái gì cả trong vòng 3s [Không chắc vì không được tham khảo code bên họ]
+
+V. Nhận xét meta chung
+	- Rất nhiều tanker
+	- Một số bot nhanh nhưng không nhiều
+	- Sensor tốt nhưng AI đơn giản
+	- Cơ khí mạnh hơn software
+
+VI. Kết luận
+	Đối thủ mạnh về:
+	- Torque
+	- Push force
+	- Stability cơ khí
+
+	Đối thủ yếu về:
+	- Bảo vệ hai bên
+	- Bảo vệ phía sau
+	- Tactical AI
+	- Recovery logic

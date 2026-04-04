@@ -1,0 +1,35 @@
+
+    Pin 18 (GPIO39/SVN) -> Mắt gầm (DETECT)
+    Pin 19 (GPIO34) -> Mắt Trái sau (BL)
+    Pin 20 (GPIO35) -> Mắt Phải sau (BR)
+    Pin 21 (GPIO32) -> Mắt Trái trước (FL)
+    Pin 22 (GPIO33) -> Mắt Phải trước (FR)
+
+    Pin 23 (GPIO25) -> I2C SCL của 5 VLX + LMS
+    Pin 24 (GPIO26) -> I2C SDA của 5 VLX + LMS
+    (Gom 2 dây I2C sát nhau)
+
+    Pin 25 (GPIO27) -> XSHUT 0 (Giữa)
+    Pin 26 (GPIO14) -> XSHUT 1 (Trái)
+    Pin 27 (GPIO12) -> BỎ QUA! KHÔNG CẮM GÌ VÀO ĐÂY!
+    Pin 28 (GPIO13) -> XSHUT 2 (Phải)
+
+    Pin 5 (GPIO4) -> Nút bấm (TTP223)
+
+    Pin 6 (GPIO16/RX2) -> XSHUT 3 (Sườn Trái)
+    Pin 7 (GPIO17/TX2) -> XSHUT 4 (Sườn Phải)
+    (Gom 2 dây XSHUT còn lại vào sát nhau)
+
+    Pin 9 (GPIO18) -> LPWM Phải
+    Pin 10 (GPIO19) -> RPWM Phải
+    Pin 11 (GPIO21) -> LPWM Trái
+
+    Pin 12 & 13 (RX0, TX0) -> BỎ QUA! (Dành cho nạp code/USB).
+
+    Pin 14 (GPIO22) -> RPWM Trái
+    Pin 15 (GPIO23) -> SDA của 0.96 LED
+	Pin 8 (GPIO5) -> SCL của 0.95 LED
+	
+	Chân CS của LMS -> Nối lên 3.3V
+	Chân SA0 của LMS -> nối lên 3.3V
+	
