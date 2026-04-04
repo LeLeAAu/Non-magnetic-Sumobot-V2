@@ -1,3 +1,172 @@
+# English
+# I. Overview
+**Non-magnetic-Sumobot-V2** is an autonomous robotic system powered by the ESP32 microcontroller, specifically engineered for the competitive environment at UTC (University of Transport and Communications). 
+
+The project focuses on the synergy between **Asymmetric Mechanical Design** and **Multi-threaded Data Processing**. Our core objective is to create an entity capable of instantaneous reflexes and tactical dominance through intelligent maneuvering on the **FreeRTOS** platform.
+
+## 1. Project Status
+- **Status:** `Ongoing` (In active development). 
+- *Note:* The project is currently pacing itself based on the author's budget constraints—engineering brilliance is infinite, but student funds are not.
+
+## 2. License
+- **LICENSE:** This project is released under the **MIT License**. You are free to copy, modify, distribute, and use the source code and hardware designs for both commercial and non-commercial purposes, provided that the original copyright notice and license terms are maintained.
+
+---
+
+# II. Repository Structure
+To ensure maintainability and facilitate collaboration, the repository is organized into logical directories. This structure strictly separates executable code, research documentation, and debugging utilities.
+
+* **/main**: Core project source code and firmware.
+* **/debug**: Independent code snippets designed for unit testing and sensor calibration.
+* **/Documents**: Comprehensive research papers, schematics, and technical specifications.
+* **/Images**: Visual media, diagrams, and project photos.
+
+---
+
+# III. UTC Tournament Rules & Regulations
+## 1. Physical Constraints
+- **Dimensions:** Maximum **15cm x 15cm** (footprint). *No height limit.*
+- **Weight:** Maximum **1.5kg**.
+- **Dohyo (Arena):** A circular flat surface, **100cm** in diameter, with a **5cm** white border.
+- **Magnet Ban:** Non-metallic surface. Tractive effort relies solely on the laws of static friction between tires and the floor: $$F = \mu \cdot N$$
+
+## 2. Operational Requirements
+- **100% Autonomous:** Any form of remote control or wireless communication is strictly prohibited.
+- **Start Delay:** A mandatory **3-second delay** is required after activation before any movement occurs.
+
+## 3. Match Format
+- **Duration:** 3 rounds per match, maximum 3 minutes per round.
+- **Victory Conditions:** Successfully pushing the opponent out of the ring or causing them to flip/lose mobility.
+- **"Last Touch" Rule:** In the event of a simultaneous fall, the robot that touches the ground last is declared the winner.
+- **Starting Positions:**
+    * **Qualifiers:** Designated by the referee (Head-to-head, Back-to-back, or 45° angles).
+    * **Finals:** Teams choose their own positions—introducing **Game Theory** elements to predict and counter the opponent's initial trajectory.
+
+---
+
+# IV. Mechanical Design & Weight Strategy
+**Technical Weight Distribution Breakdown:**
+* Worm Gear Motors (x2): **710g**
+* PETG Chassis: **230g**
+* 3S 1500mAh LiPo Battery: **150g**
+* Wheels (x2): **60g**
+* BTS7960 Motor Drivers (x2): **40g**
+* Electronics (ESP32, Buck converter, Sensors, etc.): **~66g**
+* **Total Technical Mass:** **~1256g**
+
+While the regulations allow for up to 1.5kg, this project intentionally opts for a **"Light & Agile"** strategy (leaving ~244g for aesthetic "Deco" and shielding) based on two analytical points:
+
+1.  **Inertia vs. Maneuverability:** Increasing static weight does not yield linear benefits. Excessive mass increases the **moment of inertia**, hindering rapid rotation and "flanking" maneuvers, while also draining the battery faster.
+2.  **Scouting Intelligence:** Data suggests that most UTC competitors utilize rigid, "cookie-cutter" designs with predictable algorithms and side-profile blind spots. Therefore, extreme pushing force is deprioritized in favor of high-speed tactical positioning. The **Self-locking Worm Gear** system provides sufficient defensive "stiffness" even at 1.25kg.
+
+---
+
+# V. Competitor Ecosystem Deep Dive
+For a detailed meta-analysis of common opponent designs and counter-strategies, please refer to the `/Documents` directory.
+
+# VI. Hardware Architecture
+The electronic backbone of the project is designed for high-speed data acquisition and high-torque power delivery.
+
+### 1. ESP32 Dual-Core (Processing Power)
+Leveraging the **Xtensa® Dual-Core 32-bit LX6** microprocessor (240MHz), the system implements true **Real-Time multitasking (RTOS)**:
+* **Core 0:** Dedicated to high-speed I2C sensor bus communication and data sampling.
+* **Core 1:** Reserved for kinematic calculations, FSM logic execution, and PWM motor control.
+
+### 2. Time-of-Flight (ToF) Array
+A 5-unit **VL53L1X** array provides 360-degree spatial awareness (Center, Left, Right, Left-Flank, Right-Flank).
+* **I2C Address Re-assignment:** Since VL53L1X sensors share a default address (0x29), a sequential boot sequence is implemented. By toggling individual **XSHUT** pins via GPIO, the ESP32 assigns unique hardware addresses (0x30 - 0x34) to each sensor, enabling high-bandwidth parallel scanning with minimal wiring.
+
+### 3. Line Detection & Underbelly Sensing
+Five **TCRT5000** infrared reflective modules are deployed:
+* **Four Corner Sensors:** Detect the white boundary (Dohyo edge) to trigger emergency avoidance.
+* **"The Detect Eye" (Underbelly Sensor):** Mounted upward on the bulldozer blade. Its sole purpose is to detect the opponent's chassis once successfully wedged. This triggers the **Lift-and-Push** mode, overriding standard pursuit logic to finish the kill.
+
+### 4. 6-Axis Inertial Measurement Unit (IMU)
+The **LSM6DS3** (I2C 0x6B) acts as the robot's "vestibular system":
+* **Impact Detection:** Detects sudden G-force spikes (>0.6G) to confirm physical contact even if optical sensors are blinded.
+* **Anti-Lift Protocol:** Monitors **Pitch** angles. If the nose exceeds 15°, the system recognizes it is being lifted and triggers an emergency reverse maneuver.
+
+### 5. Power Management
+* **Source:** 3S LiPo (11.1V - 12.6V) 1500mAh 45C.
+* **Regulators:** Dual **Mini560PRO** synchronous buck converters (dedicated 5V and 3.3V rails).
+* **Motor Drivers:** High-current **BTS7960** H-Bridge modules.
+
+---
+
+# VII. Software Architecture & RTOS
+The firmware is built on a non-blocking, multi-threaded paradigm.
+
+### 1. Multi-Core Task Distribution
+1.  **TaskSensorHandle (Core 0):** Samples 5x ToF, 5x TCRT, and IMU data. This ensures the sampling rate remains constant and is never jittered by motor control loops.
+2.  **TaskFSMHandle (Core 1):** Consumes "cleaned" data to update the **Finite State Machine (FSM)** and output PWM signals.
+
+### 2. Data Synchronization (Spinlock Mutex)
+To prevent **Race Conditions** between the sampling core and the logic core, all system variables are protected via **Spinlock Mutex** (`dataMutex`).
+> [!IMPORTANT]
+> The logic core is "locked" during memory writes to ensure the robot never acts on partial or corrupted sensor packets.
+
+### 3. Signal Processing & Filtering
+* **Median Filter:** ToF distance data passes through a 3-window sorting network to eliminate "spikes" and environmental noise.
+* **Exponential Moving Average (EMA):** Relative velocity ($v_e = \Delta d / \Delta t$) is smoothed using an $\alpha = 0.25$ coefficient to filter out mechanical vibrations.
+
+### 4. Optimized Kinematics
+* **Estimated Velocity:** Real-time speed ($v_0$) is interpolated based on PWM duty cycles and empirical constants ($V_{max} \approx 500 mm/s$).
+* **Look-up Tables (LUT):** To save CPU cycles, trigonometric functions for sensor angles (SIN/COS) are pre-calculated. Target vectors are computed using simple matrix multiplications, reducing latency to nanoseconds.
+
+---
+
+# VIII. Finite State Machine (FSM) & Tactics
+The brain operates on a 19-state FSM managed by `enterState()`, which handles state transitions, anti-stuck timers, and OLED telemetry updates.
+
+### 1. Defensive States
+* **STATE_DEF_EDGE_AVOID:** Instant diagonal reverse triggered when TCRT falls below `TCRT_EDGE_TH`.
+* **STATE_DEF_ANTI_LIFT:** Pitch-based recovery to escape "Wedge Lords."
+* **STATE_DEF_ANTI_PUSH:** If IMU detects backward acceleration while the robot is moving forward, the system identifies a "stealth pusher" (in a blind spot) and counters with max PWM.
+* **STATE_DEF_SIDE_GUARD:** Flank ToF triggers a rapid pivot to face the threat with the primary blade.
+
+### 2. Offensive States
+* **STATE_ATK_STRIKE:** Full-throttle (PWM 255) head-on collision when the target is within striking distance.
+* **STATE_ATK_LOCK:** Proportional Steering ($K_p$) pursuit. Adjusts differential wheel speeds based on the target's relative angle.
+* **STATE_ATK_FLANK:** The "Blind Spot Exploit." Instead of a head-on turn, the robot arcs around the opponent's ultrasonic field to strike their vulnerable side.
+* **STATE_ATK_LIFT:** Triggered by the Underbelly Sensor. Enters a high-torque "pulse" mode to drive the airborne opponent off the ring.
+* **STATE_ATK_FEINT:** A 25% chance "juke" move—pulsing forward and stopping abruptly to bait the opponent's sensor reaction.
+* **STATE_ATK_STALEMATE_BRAKE:** When $v=0$ during a push, the robot "jiggles" its wheels (PWM oscillation) to break the mechanical equilibrium and find a gap under the enemy's blade.
+
+### 3. Search Strategy
+* **STATE_SEARCH_ENEMY:** Default scanning mode using `PWM_TURN_MIN`. The power is precisely tuned to overcome the **Worm Gear** internal friction for a smooth, consistent rotation without jitter.
+
+# IX. ESP32 Pinout Mapping
+
+| Function | Component Name | ESP32 Pin (GPIO) | Notes & Hardware Installation |
+| :--- | :--- | :--- | :--- |
+| **Line & Underbelly Sensing** | Underbelly Eye (DETECT) | Pin 18 (GPIO39/SVN) | Detects if the opponent is successfully wedged. |
+| | Back-Left (BL) | Pin 19 (GPIO34) | Edge detection - Rear left. |
+| | Back-Right (BR) | Pin 20 (GPIO35) | Edge detection - Rear right. |
+| | Front-Left (FL) | Pin 21 (GPIO32) | Edge detection - Front left. |
+| | Front-Right (FR) | Pin 22 (GPIO33) | Edge detection - Front right. |
+| **Core I2C Bus** | I2C SCL (5x ToF + IMU) | Pin 23 (GPIO25) | **MANDATORY:** Keep SDA/SCL wires twisted/close to minimize EMI. |
+| | I2C SDA (5x ToF + IMU) | Pin 24 (GPIO26) | High-speed data synchronization. |
+| **ToF Hardware Control** | XSHUT 0 (Center) | Pin 25 (GPIO27) | Hardware multiplexing for address re-assignment. |
+| | XSHUT 1 (Left) | Pin 26 (GPIO14) | Hardware multiplexing for address re-assignment. |
+| | XSHUT 2 (Right) | Pin 28 (GPIO13) | Hardware multiplexing for address re-assignment. |
+| | XSHUT 3 (Left Flank) | Pin 6 (GPIO16/RX2) | **MANDATORY:** Route flank XSHUT wires away from motor leads. |
+| | XSHUT 4 (Right Flank) | Pin 7 (GPIO17/TX2) | Route with XSHUT 3. |
+| **Motor PWM Control** | Right LPWM | Pin 9 (GPIO18) | PWM Signal for Right BTS7960. |
+| | Right RPWM | Pin 10 (GPIO19) | PWM Signal for Right BTS7960. |
+| | Left LPWM | Pin 11 (GPIO21) | PWM Signal for Left BTS7960. |
+| | Left RPWM | Pin 14 (GPIO22) | PWM Signal for Left BTS7960. |
+| **User Interface (UI)** | Capacitive Touch (TTP223) | Pin 5 (GPIO4) | Triggers FSM Start & 3s Delay. |
+| | I2C SDA (OLED 0.96) | Pin 15 (GPIO23) | Dedicated I2C bus to prevent sensor latency. |
+| | I2C SCL (OLED 0.96) | Pin 8 (GPIO5) | Secondary I2C clock. |
+| **Hardware Strapping** | LMS Module CS Pin | -> Pull-up to 3.3V | Sets I2C mode for IMU. |
+| | LMS Module SA0 Pin | -> Pull-up to 3.3V | Sets hardware I2C address for IMU. |
+| **FORBIDDEN PINS** | PIN 27 (GPIO12) | **IGNORE** | **STRONGLY PROHIBITED.** Can cause Boot failures if pulled High. |
+| | Pins 12 & 13 (RX0, TX0) | **IGNORE** | Reserved for UART Flashing / Serial Debugging. |
+
+> [!NOTE]
+> Complete wiring schematics, including protection diode placements and decoupling capacitor maps, are available as high-resolution design files in the `/Documents` (Fritzing) directory.
+
+# Vietnamese
 # I. Tổng quan
 Non-magnetic-Sumobot-V2 là hệ thống robot tự hành sử dụng vi điều khiển ESP32, được thiết kế chuyên biệt cho môi trường thi đấu tại UTC.
 Dự án tập trung vào việc kết hợp giữa Thiết kế cơ khí bất đối xứng và Xử lý dữ liệu đa luồng. Mục tiêu là tạo ra một thực thể có khả năng phản xạ tức thì và chiếm ưu thế nhờ các chiến thuật cơ động thông minh trên nền tảng FreeRTOS.
