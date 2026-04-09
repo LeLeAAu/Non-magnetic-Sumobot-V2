@@ -1,0 +1,37 @@
+Rules
+📌 1. Match format
+Each match consists of three rounds (each round lasts 3 minutes) between two teams.
+The winning team is the one with the higher total score after all rounds.
+Extra rounds may be held in case of a tie.
+📌 2. Teams
+Each team may have a maximum of 5 members and must include at least one student from the Mechanical Engineering or Mechatronics department of the university.
+📌 3. Competition arena
+The arena is circular with a diameter of 100 cm and a 5 cm white border.
+There are two starting lines placed 20 cm apart.
+📌 4. Robot regulations
+Dimensions: maximum 15 cm × 15 cm, height is not limited.
+Weight: ≤ 1.5 kg.
+The robot must be fully autonomous; wireless communication during matches is prohibited.
+The robot must include a 3-second delay in its program before it starts moving.
+Robots must not cause interference, damage the arena, or use liquids, adhesives, chemicals, or any throwing/shooting mechanisms.
+📌 5. Winning conditions
+A robot wins the round by pushing the opponent out of the arena or causing it to flip over.
+If both robots fall out of the arena, the robot that falls later wins.
+If there is no winner, an extra round will be held; if still tied, the result will be decided by drawing lots.
+📌 6. Violations
+Robot regulation violations: match loss and the opponent receives +2 points.
+Unsportsmanlike behavior: disqualification from the competition.
+Match violations: warnings, or loss of the round or match depending on the number of violations.
+📌 7. Protests and referees
+The team captain may file a protest before or after a round.
+The referee’s decision is final.
+
+Notes
+In regular matches, the starting positions of your robot and the opponent’s robot will be decided by the referee:
+Front vs front
+Side vs side
+Rear vs rear
+45-degree angle vs −45-degree angle
+
+In the semifinals and finals, teams may choose their robot’s starting positions.
+The arena is non-metallic, so magnets cannot be used in the robot.

@@ -1,0 +1,84 @@
+-> The front blade must reach the level of scraping the floor surface, must be sharpened properly, and pressed tightly against the floor (using Teflon tape) to ensure that in a head-on collision, my robot gets underneath the opponent.
+-> Clean the tires with alcohol or glass cleaner before every match to remove dust.
+
+5x VL53L1X
+    25 × 15.6 mm
+    2 g each
+    Connect SDA and SCL of all 5 sensors together into only 2 wires → 2 I2C pins
+    5 separate GPIO pins to individually control XSHUT
+
+5x TCRT5000
+    10.2 × 5.8 × 7 mm
+    ~7 g each
+
+Shangyi 1500 mAh 45C 3S
+    22 mm × 35 mm × 73 mm
+    150 g
+
+2x 5840-31ZY Worm Gear Motor
+    115 × 54 × 34 mm
+    355 g each
+
+2x BTS7960
+    40 × 50 × 12 mm
+    20 g each
+    Use jumper wires to short R_EN and L_EN together, then connect directly to 3.3V (or 5V logic)
+
+DOIT ESP32 CH340 30P
+    (VIN, 2x GND, 3V3, EN, VP, VM, TX0, RX0, RX2, TX2, D2, D4, D5, D18, D19, D21, D22, D23, D12–D15, D12, D13, D14, D25, D26, D27, D32–D35)
+
+mini560 PRO – 3.3V and mini560 PRO – 5V
+    29 × 18 × 5.4 mm
+    6 g
+
+GY-LSM6DS3
+    13 × 18 mm
+    2 g
+    I2C address: 0x6B
+
+TTP223
+    24 × 24 mm
+
+0.96" OLED display
+
+470 µF / 25V capacitor
+    // diameter × height
+    10 × 12.5 mm
+    1.5 g
+
+0.1 µF capacitor
+    3.2 × 1.6 mm
+    0.1 g
+
+1000 µF capacitor
+    10 × 20 mm
+    2 g
+
+Resistors
+
+KCD1 rocker switch
+    21 × 15 mm (outer face) – 19 × 13 mm (mounting cutout)
+    3 g
+
+Robot wheel V2 65 mm (rubber)
+    Diameter: 65 mm
+    Width: 27 mm
+    Hex hub: 12 mm
+
+// Connect two 0.22 µF capacitors from the positive and negative motor terminals to the metal casing
+// The metal casing will act as a Faraday cage
+
+PETG frame ~230 g
+VL53L1X total 10 g
+TCRT5000 total 2.5 g
+Shangyi battery 150 g
+5840-31ZY worm gear motors 710 g total
+BTS7960 total 40 g
+DOIT ESP32 CH340 30P 12 g
+mini560 PRO total 12 g
+GY-LSM6DS3 2 g
+Large green TTP223 assumed 5 g
+Robot wheels V2 65 mm assumed 60 g
+KCD1 rocker switch assumed 3 g
+Capacitors and resistors assumed 20 g
+Wiring unknown.

@@ -1,0 +1,659 @@
+// IMPORTANT!!!: The following information only applies to opponents at UTC
+// Rare does not mean good
+// At UTC, even Rare or Epic is already used by only about 1%
+I. Overview of opponent designs
+    - Most opponents in Sumo Robot matches tend to use relatively traditional designs, focusing more on practical combat effectiveness rather than complex algorithms. Most of their strategies rely on detecting the opponent in front and pushing them directly out of the arena.
+
+    - Basic design usually includes:
+        + A low chassis to improve stability
+        + A reinforced front section to withstand collisions
+        + A forward-biased center of gravity to increase pushing force
+        + The rear is usually less protected
+        + This creates common weak points on both sides and the rear of the robot.
+
+// IMPORTANT!!!: The following information only applies to opponents at UTC
+// Rare does not mean good
+
+II. Distance Sensor Systems (Opponent “Vision”)
+
+    1. Ultrasonic Sensor Group
+        Common models:
+            HC-SR04,
+            SRF05,
+            FRS04,
+            HC-SR05,
+            JSN-SR04T,
+            AJ-SR04M...
+        Rarity:
+            Common (very widespread, seen in about 80% of student robots)
+
+        Characteristics:
+            Extremely cheap and easy to obtain.
+            Wide cone-shaped detection angle, easy to detect large opponents.
+            Easy to use, plug-and-play.
+
+        Critical weaknesses & tactical exploitation:
+            Update speed is limited by the speed of sound. If the opponent moves too fast, the measured data may become inaccurate.
+            Has a "blind zone" at very close range. When two robots are in close contact, ultrasonic sensors become completely ineffective.
+            Affected by reflection angles: If your robot has angled surfaces, the enemy’s sound waves may reflect upward instead of back to the sensor → The opponent may fail to detect you.
+            Very susceptible to noise from mechanical vibration or motor interference.
+
+    2. Optical ToF (Time of Flight) Sensor Group
+        Common models:
+            VL53L0X,
+            VL53L0XV2,
+            VL53L5X,
+            TOF10120,
+            TOF0400F...
+        Rarity:
+            Uncommon → Rare (depending on investment level)
+
+        Characteristics:
+            Uses laser beams to measure photon flight time.
+            Extremely high measurement accuracy (millimeter precision).
+            Fast response time, less affected by environmental noise compared to ultrasonic sensors.
+
+        Critical weaknesses & tactical exploitation:
+            I2C communication can easily freeze (an I2C freeze may lock the entire microcontroller).
+            Very narrow beam angle. If the opponent rotates too quickly, the ToF beam may miss your robot.
+            The laser can be temporarily blinded by extremely strong light sources (risky if the arena uses powerful lighting).
+            Expensive.
+
+    3. Infrared Optical Sensor Group
+        Common models:
+            GP2Y0A02YK0F (Sharp),
+            E18-DNK80...
+        Rarity:
+            Uncommon
+
+        Characteristics:
+            Very fast response speed.
+            No trigger pulse required like ultrasonic sensors; outputs direct Analog or Digital signals for very fast processing.
+
+        Critical weaknesses & tactical exploitation:
+            Analog output is nonlinear (parabolic response curve), requiring good interpolation algorithms.
+            High electrical noise if the opponent's power system is poorly filtered.
+            Strongly dependent on color and material. Infrared light is heavily absorbed by black surfaces. If your robot is fully coated in matte black, the detection range of these sensors on the opponent’s robot may be significantly reduced (potentially up to 50%).
+
+    4. Industrial-grade Sensor Group
+        Common models:
+            CDD-40N,
+            E3F-20C1,
+            RCWL1601...
+        Rarity:
+            Mythic (~0% usage, no one at UTC has been seen using them yet)
+
+        Characteristics:
+            Extremely reliable, designed for factory environments.
+            Very stable detection, almost immune to common noise sources in student competitions.
+
+        Critical weaknesses & tactical exploitation:
+            Very large and heavy → Literally weighs the team down, disrupts the robot’s center of gravity, making it easier to tip or lose balance when turning.
+            High current consumption, increasing battery load.
+            Overkill for a high-speed competition environment that requires agility.
+			
+III. Opponent Detection Sensor Layout (Sensor Layout & Blind Spots)
+
+    1. "Self-Destruct" Layout (0°)
+        Rarity:
+            Common (often seen in first-year beginner teams joining just for participation)
+        Characteristics:
+            Only one sensor pointing straight forward (0°).
+        Critical weaknesses & tactical exploitation:
+            Extremely narrow field of view.
+            Counter strategy: Simply sidestep slightly or move behind the opponent, and their robot effectively becomes a useless brick.
+
+    2. Minimal Layout (0°, 180°)
+        Rarity:
+            Common (a small upgrade from beginner teams)
+        Characteristics:
+            Can detect both front and rear.
+        Critical weaknesses & tactical exploitation:
+            Both sides remain completely blind.
+
+    3. Standard / Spearhead Layout (0°, 45°, -45°)
+        Rarity:
+            Uncommon (standard layout for most students)
+        Characteristics:
+            Very good front coverage, including diagonal angles, reducing the risk of direct side attacks.
+        Critical weaknesses & tactical exploitation:
+            Major blind spot exists in the rear hemisphere (from 90° through 180° to -90°).
+
+    4. Standard Plus Layout (0°, 45°, -45°, 180°)
+        Rarity:
+            Uncommon
+        Characteristics:
+            Maintains the strong front coverage of Layout 3 while covering the critical rear blind spot.
+        Critical weaknesses & tactical exploitation:
+            Still vulnerable on the side flanks (90° and -90°).
+
+    5. Four-Direction / Extended Layout (0°, 90°, -90°, 180°)
+        Rarity:
+            Rare
+        Characteristics:
+            Covers all four main directions. Theoretically well-rounded.
+        Critical weaknesses & tactical exploitation:
+            In real matches: Student FSM algorithms are often not sophisticated enough to smoothly process four sensor inputs simultaneously. Priority-based code (if-else) often favors forward attack commands, causing awkward reactions when attacked from multiple directions.
+            New blind spots appear at diagonal angles (45°, 135°, -45°, -135°). Attacking between two sensors diagonally may cause detection delays.
+
+    // ADVANCED SENSOR LAYOUTS
+    // If you encounter opponents using these, prepare for a very serious match.
+
+    6. Front Half-Moon Layout (0°, ±45°, ±90°)
+        Rarity:
+            Mythic
+        Tactical meaning:
+            Absolute defense for the front hemisphere.
+            Effectively blocks most side attack attempts.
+
+    7. X-Shape Critical Diagonal Layout (±45°, ±135°)
+        Rarity:
+            Epic
+        Tactical meaning:
+            Ignores traditional vertical/horizontal axes.
+            Designed for robots with very strong spin or pivot capabilities.
+            Very difficult to predict and counter.
+
+    8. Front-Heavy Focus Layout (0°, ±15°, ±30°)
+        Tactical meaning:
+            Sacrifices side vision to concentrate 100% of sensing capability at the front.
+            Usually paired with strong target tracking algorithms.
+            The opponent is essentially turning their robot into a heat-seeking missile.
+            Commonly used on wedge-focused designs.
+
+    9. Front-Heavy-Max Swirl Layout (0°, ±10°, ±20°, ±30°)
+        Tactical meaning:
+            The most extreme variation of the focused layout.
+            Provides ultra-dense front scanning to ensure your robot stays centered in the opponent’s wedge.
+            Opponents using this layout likely have very strong FSM and PID implementations to optimize attack angles.
+            Avoid direct frontal engagement whenever possible.			
+		
+		
+IV. Edge Detection System (Emergency brake to prevent ring-out)
+
+    1. Edge Sensor Types
+
+        Entry-level group (TCRT5000):
+            Rarity:
+                Common
+            Characteristics:
+                Large modules, bulky, easy to install.
+            Critical weakness:
+                Extremely sensitive to ambient light.
+
+        Mid-range group (ST188, QRD1114, RPR-220, CNY70):
+            Rarity:
+                Uncommon
+            Characteristics:
+                More compact
+                Slightly better current characteristics and sensitivity than TCRT5000
+                Often integrated into custom PCBs mounted directly under the chassis to save space.
+
+        High-end group (Pololu QTR-1A):
+            Rarity:
+                Epic
+            Characteristics:
+                Premium components
+                Very compact
+                Extremely fast response time and strong ambient light noise immunity.
+                Designed for high-speed competitions.
+
+    2. Edge Sensor Layout
+
+        Single Front Layout (1× Front)
+            Rarity:
+                Common (the most "naive" layout).
+            Tactical meaning:
+                Only detects the white boundary line directly at the center front.
+            Critical weakness:
+                If the robot is reversing or pushed from behind, it may fall off the arena without resistance.
+                During diagonal attacks, the wheels may already be outside before the center sensor detects the boundary.
+
+        Longitudinal Dual Layout (1× Front + 1× Behind)
+            Rarity:
+                Uncommon
+            Tactical meaning:
+                Fixes the main weakness of the Single Front layout.
+                Much safer when being pushed backward or when executing programmed retreat maneuvers.
+            Critical weakness:
+                The sides of the wheels remain blind spots.
+                If hit from the side (90-degree impact) and pushed sideways out of the arena, this system becomes ineffective.
+
+        Dual Corner Layout (1× Front Left + 1× Front Right)
+            Rarity:
+                Common (current meta, most popular layout).
+            Tactical meaning:
+                Placed at the two front corners.
+                Very effective when attacking diagonally or cornering.
+                When one sensor detects the boundary, the controller can pivot the robot back toward the arena center.
+            Critical weakness:
+                Rear vulnerability remains. Reversing is still dangerous.
+
+        Four-Corner Layout (1× Front Left + 1× Front Right + 1× Rear Left + 1× Rear Right)
+            Rarity:
+                Epic
+            Tactical meaning:
+                A theoretical fortress.
+                Nearly complete protection regardless of push direction or rotation angle.
+            Critical weaknesses & implementation risks:
+                Consumes 4 digital (or analog) MCU pins, complicating wiring.
+                Requires solid FSM (Finite State Machine) programming.
+                If interrupts or delays are poorly handled, simultaneous sensor triggers may cause oscillation (rapid forward/backward jitter) near the edge, creating an opening for the opponent to finish the match.
+
+V. Microcontrollers (Opponent “Brain” / MCU)
+
+    1. Arduino Group
+        Common models:
+            Arduino Uno R3 (Common)
+            Arduino Uno R4 Minima (Rare)
+            Arduino Nano (Uncommon)
+            Arduino Pro Mini (Rare)
+            SAMD21 M0 / M0 Mini (Epic)
+
+        Characteristics:
+            Extensive documentation, abundant libraries, very beginner-friendly.
+            Usually runs simple sequential logic (if-else structures).
+
+        Critical weaknesses & tactical exploitation:
+            Processing speed (especially AVR-based boards like Uno R3/Nano at 16MHz) is relatively slow for real-time combat standards.
+            If too many sensors are used without proper optimization, the main loop may become congested (implicit delays).
+            This creates reaction latency—your robot may already evade while the opponent reacts too late.
+
+    2. ESP Group
+        Common models:
+            ESP32-WROOM-32 (Uncommon)
+            ESP32-S3 (Uncommon)
+            ESP32-WROOM-38P (Uncommon)
+            ESP32 CH340 30P (Uncommon)
+
+        Characteristics:
+            Very high clock speeds (up to 240MHz), multi-core architecture.
+            Easily capable of running complex FSM logic or smooth PID tracking algorithms.
+
+        Critical weaknesses & tactical exploitation:
+            Overkill if only running simple sequential logic.
+            3.3V logic levels are relatively sensitive to electrical noise from high-power motors.
+
+    3. RP2040 Group
+        Common models:
+            Raspberry Pi Pico (Epic)
+            RP2040 Pro Micro (Epic)
+
+        Characteristics:
+            Dual-core ARM Cortex-M0+ architecture, high speed (133MHz), very affordable.
+            Features powerful PIO (Programmable I/O) for parallel sensor reading without CPU overhead.
+
+        Critical weaknesses & tactical exploitation:
+            Library ecosystem for Sumo Bots is not as plug-and-play as Arduino.
+            Very few students utilize even 30% of this chip’s capabilities.
+            If encountered, it is likely being used like an expensive Arduino Nano.
+
+    4. ARM Architecture / Specialized MCU Group
+        Common models:
+            STM32G431CBU6 (Legendary)
+            STM32F103C8T6 (Epic)
+            STM32F411 Black Pill (Epic)
+            STC32G12K128 (Legendary)
+            CH32V307VCT6 (Legendary)
+
+        Characteristics & tactical advantages:
+            The strength of this group, especially STM32, lies in powerful interrupt systems, DMA, and hardware timers.
+            Capable of reading many sensors and controlling motors smoothly with near-zero latency.
+            However, the learning curve is very steep.
+            Anyone bringing an STM32 board into competition likely understands registers, hardware architecture, and fully controls their FSM.
+            These are genuinely strong opponents from a logic standpoint.
+
+    5. High-Performance Compute Group
+        Common models:
+            Teensy 4.0 (God-tier)
+            Teensy 4.1 (God-tier)
+
+        Characteristics:
+            Extremely high clock speeds (up to 600MHz), comparable to older desktop computers.
+
+        Critical weaknesses:
+            Financial and technical overkill for typical Sumo Bot problems.
+            If someone brings such an expensive board into a pushing match, they are either very well funded or simply reused it from a previous major project.
+			
+VI. Drivetrain System (Mobility Chassis)
+
+    1. Standard Configuration (2 Wheels – 2 Motors)
+        Rarity:
+            Common (most popular configuration).
+        Characteristics:
+            Each side uses one motor directly driving one wheel (Direct Drive).
+            Highly agile with fast acceleration.
+            Smooth pivot/spin turning with an almost zero turning radius.
+
+        Critical weaknesses & tactical exploitation:
+            Traction (grip) depends entirely on two very small contact patches.
+            Basic dynamics problem: The center of gravity (CG) must be properly positioned over the wheel axis. If the front is too heavy and the rear too light (or vice versa), collision leverage may lift the wheels off the ground → complete loss of static friction, causing the wheels to spin freely while being pushed back.
+            Easily tipped or destabilized by strong side impacts.
+
+    2. Alternative / Skid-Steer Configuration (4 Wheels – 2 Motors)
+        Rarity:
+            Uncommon.
+        Characteristics:
+            Uses two motors with belt or gear transmission to drive all four wheels simultaneously.
+            Excellent stability. Weight distributed across four contact points provides strong grip.
+
+        Critical weaknesses & tactical exploitation:
+            Extremely high lateral friction during turning. Rotation is heavy, slow, and draws large current from the battery.
+            Against this type, avoid direct frontal engagement.
+
+    3. Track System Configuration (Tank Tracks – 2 Motors)
+        Rarity:
+            Rare (looks impressive but rarely used in serious competition).
+        Characteristics:
+            Largest ground contact area → static friction near maximum. Once anchored, pushing it is like pushing a rock.
+
+        Critical weaknesses & tactical exploitation:
+            Very slow movement due to energy loss in the track and sprocket system.
+            Extremely high power consumption, rapid battery drain, and motor overheating risk if jammed.
+            Mechanical weak point: Rubber or 3D-printed tracks often have slack. If your robot has a sharp wedge, a diagonal hit to the side or idler assembly may derail or break the track. Once that happens, the “unstoppable tank” becomes an immobile metal block.
+
+VII. Combat Strategy Classification
+
+    1. Simple brute-force approach – Tanker
+        Rarity:
+            Common (very frequently encountered).
+        Characteristics & equipment:
+            Uses high-torque motors, sacrificing speed.
+            Simple logic: detect → charge.
+        Strategy (FSM):
+            Scan → Detect → Rush forward → Push continuously.
+
+        Critical weaknesses & tactical exploitation:
+            Sluggishness: Very low angular acceleration, slow turning.
+            Side vulnerability: Easily countered by Flankers or Speeders through rear or side attacks. Once pushed sideways, the Tanker’s torque advantage becomes useless.
+
+    2. Speed compensation approach – Speeder
+        Rarity:
+            Common (an evolutionary step from Tankers).
+        Characteristics & equipment:
+            High RPM motors with moderate torque.
+            More refined FSM code with better approach angle calculation.
+
+        Strategy (FSM):
+            Scan (wide search) → Align (target lock) → Attack (high-speed charge).
+
+        Critical weaknesses & tactical exploitation:
+            Lower stability due to lighter weight for acceleration optimization.
+            High inertia: Missing an attack often causes drifting and loss of control.
+            Especially when hitting walls or being blocked by a defensive bot, rebound effects may destabilize control logic.
+
+    3. Wedge specialist – Wedge Lord
+        Rarity:
+            Uncommon (requires precise mechanical fabrication).
+        Characteristics & equipment:
+            Extremely low center of gravity.
+            Main weapon: ultra-thin, precisely angled wedge.
+
+        Strategy:
+            Ignores frontal attacks from Tankers.
+            During collision, the wedge slides under the opponent → full PWM push lifts opponent wheels off the ground (removing traction) → push out of the arena.
+
+        Critical weaknesses & tactical exploitation:
+            Natural enemy: Imperfect arena surfaces. Scratches, uneven joints, or rough surfaces may cause the wedge to catch and immobilize itself.
+            Vulnerable to lateral evasion strategies. The wedge is only effective at the front.
+
+    4. Sacrificial tactician – Edge Camper (Matador style)
+        Rarity:
+            Mythic (requires unconventional physics thinking).
+        Characteristics & equipment:
+            Extremely precise edge sensors.
+            Specialized drivetrain such as worm gear (self-locking) or motors with strong braking capability.
+
+        Strategy:
+            Immediately retreat to the Dohyo edge, stopping about 1 mm from the boundary and locking position.
+            Bait the Tanker into charging.
+            At impact → drive one wheel forward and one backward → use the opponent’s momentum plus rotational torque to create a throw effect.
+            The charging Tanker is flung outward by centrifugal force while the Edge Camper survives by rotating near the edge.
+
+    5. “Steel Wall” system – The Anvil
+        Rarity:
+            Rare (defensive counter-attack style).
+        Characteristics & equipment:
+            Motors with very strong braking capability.
+            Tires made from high-grip silicone or soft rubber.
+
+        Strategy:
+            Moves slowly with a low stance.
+            When sensors detect an incoming charge → instantly lock both wheels.
+            The opponent collides with an immovable object and absorbs the reaction force → rebounds and loses traction.
+            At the rebound moment → full-power counter-attack.
+
+    6. Side attacker – Flanker
+        Rarity:
+            Epic (requires advanced algorithms).
+        Characteristics & equipment:
+            Moderate linear speed but extremely high angular velocity (yaw rate).
+            Uses focused, X-shape, or side-array sensor layouts.
+
+        Strategy:
+            FSM avoids all head-on (0-degree) collisions.
+            Upon detecting a frontal opponent → lock one wheel and reverse the other to evade → follow a curved path to strike the opponent’s side blind spot.
+
+    7. Trap setter – Baiter
+        Rarity:
+            Legendary (requires mastery of both mechanics and pursuit algorithms).
+        Characteristics & equipment:
+            Extremely strong reverse acceleration.
+            Uses kinematic calculations to estimate opponent velocity and acceleration in real time (via sensor arrays or ToF).
+
+        Strategy:
+            Intentionally exposes sides or rear to bait attacks.
+            Detects the moment the opponent commits to maximum acceleration (PWM saturation) → sudden high-speed retreat or lateral sidestep.
+            Result: The opponent crashes into empty space and carries its own inertia out of the arena while the Baiter remains safe.
+			
+VIII. Motors (Muscles / Propulsion force of the opponent)
+
+    1. Medium Torque Class (Standard mid-tier)
+        Common model:
+            32GP-31ZY (12V)
+        Rarity:
+            Common
+        Combat specifications:
+            No-load speed: 160 RPM | Current: 0.45A
+            Rated load: 130 RPM | Torque: 7 kg·cm | Current: 1.8A
+            Stall condition: Peak torque 23 kg·cm | Current up to 5A per motor.
+
+        Tactical meaning & exploitation:
+            A balanced combination of speed (130 RPM) and pushing power. Suitable for both Tanker and Speeder builds.
+            Critical weakness:
+                Stall current reaches 5A.
+                With a dual-motor setup, a deadlock collision may draw 10A from the battery.
+                Using low-quality Li-ion cells or an L298N driver may cause immediate power collapse or driver failure.
+
+    2. Worm Gear Motor Class
+        Common model:
+            JGY-370 series (24V version)
+        Rarity:
+            Uncommon
+        Combat specifications:
+            Variant 1 (Speed):
+                Rated 100 RPM | Torque 2.6 kg·cm | Stall 10 kg·cm (very low current: 1.6A)
+            Variant 2 (Pulling force):
+                Rated 80 RPM | Torque 3.5 kg·cm | Stall 13 kg·cm
+
+        Tactical meaning & exploitation:
+            Worm gear provides mechanical self-locking.
+            Extremely difficult to push backward if traction is maintained.
+
+        Critical weakness:
+            Real torque is relatively modest and speed (80–100 RPM) is very slow.
+
+    3. Heavy-duty industrial class
+        Common model:
+            JGB37-3530 (24V version)
+        Rarity:
+            Uncommon
+        Combat specifications:
+            Rated: 85 RPM | Torque: 5.8 kg·cm
+            Stall: Massive torque 23.2 kg·cm
+
+        Tactical meaning & exploitation:
+            A motor built for brute pushing.
+            Slow but extremely persistent pushing force. A true Tanker motor.
+            Running at 24V forces the opponent to carry a large 6S battery pack, reducing chassis agility.
+
+    4. Planetary Gear Motor Class
+        Common model:
+            36GP-3650
+        Rarity:
+            Epic (indicates serious mechanical investment)
+        Combat specifications:
+            Variant 1 (Balanced):
+                Rated 140 RPM | Torque 7.8 kg·cm | Stall 18 kg·cm
+            Variant 2 (Aggressive):
+                Rated 90 RPM | Torque 11.1 kg·cm | Stall 25.2 kg·cm
+
+        Characteristics & advantages:
+            Planetary gearboxes handle impacts extremely well and rarely suffer gear damage during high-speed collisions.
+            Rated torque up to 11.1 kg·cm allows it to forcefully push most opponents out of the arena.
+
+        Critical weakness:
+            High torque but relatively low maximum speed.
+
+    5. High-end class (Overkill tier)
+        Common models:
+            MAXON RE35
+            PG36-550
+        Rarity:
+            Mythic (~0% usage)
+
+        Tactical meaning:
+            MAXON motors are used in aerospace and heavy industrial robotics. A single RE35 may cost as much as a laptop. Anyone bringing one is either very well funded or repurposing research hardware.
+            PG36-550:
+                A size-550 class motor capable of extremely high current draw (stall current may reach tens of amps).
+                If used without proper thermal design, the opponent’s system may fail before making contact.
+
+IX. Common motor drivers
+
+    1. Classic group
+
+        L298N (Uncommon):
+            Cheap and extremely common.
+            Easy to use and widely available.
+            Very low efficiency (old BJT technology).
+            Large voltage drop (2V–3V), reducing motor power and generating significant heat (requires large heatsink).
+            Max current: 2A per channel.
+
+        L293D (Rare):
+            Often integrated into Arduino shields.
+            Extremely low current capability (0.6A continuous).
+            Too weak for Sumo Bots, likely to fail immediately in collisions.
+            Avoid accidental purchase.
+
+    2. Small MOSFET driver group
+
+        TB6612FNG (Uncommon):
+            A strong replacement for L298N.
+            MOSFET technology: high efficiency, minimal voltage drop, no large heatsink required.
+            Very compact.
+            Max current: 1.2A continuous (3.2A peak). Suitable for 370 or N20 motors.
+
+        DRV8871 (Uncommon):
+            Compact with good efficiency.
+            Built-in overcurrent protection.
+            Max current: 3.6A peak.
+
+        MX1508 (Rare):
+            Extremely cheap and small.
+            Used mostly in compact student designs.
+            Max current: 1.5A.
+
+    3. Heavy-duty competition class (Tanker-type opponents)
+
+        BTS7960 (Common, unusually):
+            Extremely high current capability (up to 43A).
+            Suitable for heavy bots using 550, 5840, or stalled 36GP motors.
+            Strong braking capability.
+            Large size, consumes space, requires 4 PWM/DIR pins to control one motor pair.
+
+        Cytron MDD10A (Legendary):
+            Supports 10A continuous (30A peak) across two channels.
+            Efficient control: only 1 PWM (speed) and 1 DIR (direction) per motor.
+            Includes hardware test buttons for running motors without code (useful during pit debugging).
+
+        VNH2SP30 (Mythic):
+            Supports 30A continuous current.
+            Excellent tolerance to electrical shock during motor stall.
+            Includes analog current output, allowing MCU to measure consumption and detect collision or stall conditions automatically.
+
+X. Power system
+
+    1. Buck converters (step-down regulators):
+
+        LM2596 (Common):
+            Characteristics:
+                Most common in student competitions, extremely cheap.
+            Weakness:
+                Bulky with modest efficiency. Generates significant heat under high current.
+            Tactical weakness:
+                Poor voltage noise handling.
+
+        XL4015 (Uncommon):
+            Characteristics:
+                Higher current capability (5A), often with heatsink.
+                Common in sensor-heavy robots.
+
+        Mini560 (Rare):
+            Characteristics:
+                Extremely compact with very high efficiency.
+            Advantage:
+                Maintains stable 3.3V/5V logic voltage even during severe motor voltage drops.
+
+    2. Battery systems:
+
+        Common voltage configurations:
+
+            3S (Common):
+                Standard configuration for 12V motors.
+
+            4S (Uncommon):
+                Often used by Speeders to overvolt 12V motors, trading lifespan for higher speed.
+
+            6S (Uncommon):
+                Typical for heavy Tankers using 24V motors.
+                Extreme pushing force but requires large, heavy battery packs.
+
+            12S / 13S – 48V (Mythic):
+                Rarity:
+                    ~0% (no precedent).
+                Characteristics:
+                    Equivalent to bringing an e-bike or e-scooter battery into the arena.
+                    Massive energy capacity.
+                    With compatible industrial motors, pushing force could theoretically overwhelm opponents.
+
+                Paper advantages:
+                    Overvolting 24V motors (with strict PWM limits) could produce extreme acceleration.
+                    Collision energy could potentially damage opponent chassis.
+
+                Critical weaknesses & self-destructive risks:
+                    Excessive weight: A 48V battery capable of meaningful discharge would likely weigh 1–2 kg, violating typical competition limits (1.5 kg).
+                    Driver destruction: 48V would instantly destroy L298N, TB6612, and possibly even Cytron or VNH2SP30 drivers. Such voltage requires VESC-class or industrial drivers.
+                    Electrical hazard:
+                        At 48V and high current, insulation damage during collision could cause an arc flash event and total system failure.
+
+        Battery technology classification:
+
+            18650 Li-ion (most commonly used by opponents):
+                Characteristics:
+                    Cheap, relatively safe, easy to assemble with battery holders.
+
+                Critical weakness:
+                    Student-grade Li-ion cells often have low discharge ratings (around 5A–10A).
+                    When dual Tanker motors stall, current demand may reach about 10A.
+                    Poor batteries may drop voltage from 12V to below 6V.
+                    LM2596 regulators may fail due to insufficient input voltage, causing MCU reset.
+                    Result:
+                        Opponent robot may freeze or reboot mid-match.
+
+            LiPo (Lithium Polymer) (less common due to cost, charging complexity, and safety risks):
+                Characteristics:
+                    Lightweight, thin, and capable of extremely high discharge rates (high C-rating).
+
+                Tactical advantage:
+                    Preferred by competitors with strong electrical knowledge.
+		

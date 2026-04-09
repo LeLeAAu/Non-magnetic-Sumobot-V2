@@ -1,0 +1,33 @@
+Pin 18 (GPIO39/SVN) → Bottom sensor (DETECT)
+Pin 19 (GPIO34) → Rear left sensor (BL)
+Pin 20 (GPIO35) → Rear right sensor (BR)
+Pin 21 (GPIO32) → Front left sensor (FL)
+Pin 22 (GPIO33) → Front right sensor (FR)
+
+Pin 23 (GPIO25) → I2C SCL for 5 VLX + LMS
+Pin 24 (GPIO26) → I2C SDA for 5 VLX + LMS
+(Keep the two I2C wires close together)
+
+Pin 25 (GPIO27) → XSHUT 0 (Center)
+Pin 26 (GPIO14) → XSHUT 1 (Left)
+Pin 27 (GPIO12) → IGNORE! DO NOT CONNECT ANYTHING HERE!
+Pin 28 (GPIO13) → XSHUT 2 (Right)
+
+Pin 5 (GPIO4) → Push button (TTP223)
+
+Pin 6 (GPIO16/RX2) → XSHUT 3 (Left side)
+Pin 7 (GPIO17/TX2) → XSHUT 4 (Right side)
+(Keep the remaining two XSHUT wires close together)
+
+Pin 9 (GPIO18) → Right LPWM
+Pin 10 (GPIO19) → Right RPWM
+Pin 11 (GPIO21) → Left LPWM
+
+Pins 12 & 13 (RX0, TX0) → IGNORE! (Reserved for code upload/USB)
+
+Pin 14 (GPIO22) → Left RPWM
+Pin 15 (GPIO23) → SDA of 0.96 OLED
+Pin 8 (GPIO5) → SCL of 0.96 OLED
+
+LMS CS pin → Connect to 3.3V  
+LMS SA0 pin → Connect to 3.3V

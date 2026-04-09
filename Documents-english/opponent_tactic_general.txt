@@ -1,0 +1,96 @@
+I. Opponent Overview
+Most opponents belong to the Tanker category (high pushing force, slow movement), although there are still some faster robots (Speeder type).
+
+Common characteristics:
+
+Usually only the front is reinforced (dozer blade, wedge)
+Center of mass shifted forward to optimize pushing force
+Other areas such as:
+Left side
+Right side
+Two rear corners
+Rear side
+are usually not well protected
+
+This creates vulnerabilities when attacked from:
+
+Both sides
+The rear
+Diagonal angles
+
+II. Mechanical characteristics and collisions
+
+If the opponent manages to get their wedge underneath:
+Counter-attack capability is greatly reduced
+Effective pushing force is lost
+Tanker pushing force is usually:
+Very strong
+Focused on pushing power
+Does not cause much damage (not destruction-type robots)
+Some robots are not fully painted black:
+This may affect IR sensor detection reliability
+Could create an advantage if exploited properly
+
+III. Electrical system and sensors
+
+Common characteristics:
+
+Use high-voltage batteries (typically 6S)
+Very sensitive distance sensors
+Fast detection sensors but usually simple processing logic
+
+IV. Common strategies
+
+Frequently observed patterns:
+
+1. Random Search Pattern:
+The robot moves randomly to find the opponent.
+
+2. Spin Search Pattern:
+The robot spins in place.
+If the opponent is detected:
+→ Charge straight forward
+
+3. Slow Scan Pattern:
+The robot moves slowly:
+→ Detect
+→ Align
+→ Attack
+
+Remarks:
+Most strategies follow this pattern:
+Detect → Align → Rush
+
+Rarely seen:
+
+Predictive movement
+Adaptive strategy
+Multi-state combat logic
+
+Interesting observations:
+
+Some robots with advanced strategies lose because their hardware is too simple or not well matched to the strategy
+Many opponents may be using delay(3000), meaning they do nothing for 3 seconds
+[Unverified, since their code is not accessible]
+
+V. General meta observations
+
+Many tanker-type robots
+Some fast robots, but not many
+Good sensors but simple AI
+Mechanical strength often exceeds software sophistication
+
+VI. Conclusion
+
+Opponent strengths:
+
+Torque
+Pushing force
+Mechanical stability
+
+Opponent weaknesses:
+
+Side protection
+Rear protection
+Tactical AI
+Recovery logic
