@@ -1,0 +1,218 @@
+I. STATE SPACE
+	enum RobotState
+{
+    // INIT
+    STATE_IDLE, STATE_INIT_DELAY,
+	
+    // ATTACK
+    STATE_ATK_STRIKE, STATE_ATK_FLANK_FRONT, STATE_ATK_FLANK_SIDE, STATE_ATK_FLANK_REAR, STATE_ATK_LIFT, STATE_ATK_FEINT, STATE_ATK_DELAY_RUSH, STATE_ATK_LOCK,
+
+    // DEFENSE
+    STATE_DEF_ANTI_PUSH, STATE_DEF_SIDE_GUARD, STATE_DEF_REAR_GUARD, STATE_DEF_EDGE_AVOID, STATE_DEF_ANTI_LIFT, STATE_DEF_LAST_STAND,
+
+    // RECOVERY / SEARCH
+    STATE_REC_RECOVER, STATE_SEARCH_ENEMY
+};
+II. CONSTANTS & THRESHOLDS
+	II. CONSTANTS & THRESHOLDS
+    Nhóm            Biến số                    Giá trị                Meaning
+    Khoảng cách     CONF_ENY                   none                   min distance xác nhận có đối thủ
+                    WARN_DIST                  none                   ngưỡng cảnh báo đối thủ ở cự li nguy hiểm
+                    STRIKE_DIST                none                   khoảng cách bung lực tấn công (dành riêng cho d0)
+    Thời gian       MIN_STT_TIME               50ms                   thời gian tối thiểu giữ 1 state
+                    PUSH_MS                    500ms                  thời gian bơm xung lực đẩy
+                    HOLD_PUSH_MS               500ms                  thời gian duy trì lực đẩy sau xung đầu
+                    TIMEOUT_MAX                2000ms                 timeout chờ tối đa
+                    TTP_INIT                   100ms                  thời gian tối thiểu cái TTP233 nhận được tín hiệu 1
+                    ATK_LOCK_TIME              500ms                  thời gian tối đa trong STATE_ATK_LOCK
+    Guard     		SIDE_DANGER_TIME           80ms                   thời gian tối thiểu d báo < WARN_DIST để chốt sideDanger
+                    FLK_STABLE_TIME            100ms                  thời gian flkPossible phải giữ TRUE liên tục
+                    IGNORE_ANTI_PUSH           200ms                  thời gian mù bỏ qua IMU sau khi ra đòn đẩy
+                    EDGE_TIMEOUT               150ms                  thời gian phải sạch vạch trắng trước khi thoát RECOVER
+                    MAX_RECOVER_TIME           800ms                  thời gian tối đa cho 1 phase RECOVER
+    Hệ thống        RETRY_LIMIT                7 lần / 1s             giới hạn số lần thử đẩy trong 1s để chống rung lắc
+                    MAX_LOCK_RETRIES           2 lần                  số lần tối đa ngắm/đẩy hụt trước khi reset state
+                    WHITE                      none (giả sử 900)      giá trị nhận từ tcrt nếu thấy màu trắng
+                    BLACK                      none (giả sử 100)      giá trị nhận từ tcrt nếu thấy màu đen
+	
+* Phân vùng góc
+	- s_far_left (-90...-45], s_left (-45...-25), s_front_left (-25...-5]
+	- s_front (-5...5]
+	- s_front_right (5...25], s_right (25...45], s_far_right (45...90]
+	
+III. CONTINUOUS EVALUATION
+	1. Raw data
+		- Distance (VLX): d0 (0), d-45 (-45), d+45 (+45), d-90 (-90), d+90 (+90)
+		- Edge/Line (TCRT): tcrt_fl, tcrt_fr, tcrt_bl, tcrt_br, tcrt_detect
+		
+	2. Kinematics & Pursuit
+		- enemy_angle: hướng đối thủ dựa trên IMU LSM6DS3. if d > CONF_ENY -> enemy_angle = last_enemy_angle_found AND isTargetLost = TRUE
+		- v_0: vận tốc tiến của bot
+			+ Hàm tính tuyến:
+				-> Đo v_0: Cho bot chạy thẳng với PWM = 150 (khoảng 60% công suất) trong 2s. Đo quãng đường đi được (ví dụ: 1000mm) -> v_max60 = 500mm/s
+				-> Đo ω: Cho bot quay tròn tại chỗ (1 bánh tiến, 1 bánh lùi) với PWM = 150. Bấm giờ xem mất bao lâu để quay hết 360 độ -> ω_60 = 180độ/s
+			+ Cập nhật liên tục trong code:
+				-> Trong Core 0, mỗi khi Core 1 xuất một mức PWM ra động cơ -> Lưu biến global current_PWM -> Core 0 nội suy ra v_0:
+					v_0 = k_v * current_PWM * (V_battery/12.6); V_battery/12.6 optional, dùng nếu có chân ADC đọc điện áp pin
+			+ v_0 = getEstimatedVelocity(current_PWM);
+			+ omega = getEstimatedAngularVelocity(current_PWM);		
+		- Toạ độ điểm chốt P:
+			+ x_p = x_e + r_side * sin ((alpha - 90)*(pi/180))
+			+ y_p = y_e + r_side * cos ((alpha - 90)*(pi/180))
+		- Quãng đường và góc xoay của bot:
+			+ Khoảng cách phải đi: l_path = sqrt(x_p^2 + y_p^2)
+			+ Góc phải bẻ (dùng hàm atan2 trong C++): θ_target​=atan2(x_p​,y_p​)*180/pi
+			+ Độ lệch góc cần xoay: ​Δθ=∣θtarget​∣
+		- Tính thời gian: 
+			+ t_robot = ​Δθ/ω + l_path/v_max60
+			+ if v_e <= 0 then t_enemy = 9999 else t_enemy = (sqrt((x_e-x_p)^2+(y_e-y_p)^2))/v_e = r_side/v_e;
+
+			
+	3. Boolean Flags
+		- closingFast: TRUE if (d_now - d_prev) < -30mm trong 40ms
+        - flkPossible: TRUE if (t_robot + t_margin) < t_enemy VÀ duy trì liên tục > FLK_STABLE_TIME (100ms)
+        - beingLifted: TRUE if liftDetected == FALSE + IMU pitch change + d0 <= STRIKE_DIST
+        - fallOut: TRUE if liftDetected == FALSE + IMU pitch change + edgeDetect TRUE recently (trong khoảng 500ms đổ lại)
+        - liftDetected: TRUE if tcrt_detect xác định CÓ đối thủ đè ở trên
+        - impactDetected: TRUE if delta (a) > ACC_IMPACT_TH AND d0 <= STRIKE_DIST + 20mm
+        - sideDanger: TRUE if (d-45 OR d+45 OR d-90 OR d+90 < WARN_DIST) liên tục trong > SIDE_DANGER_TIME (80ms)
+        - edgeDetect: TRUE if tcrt_fl OR tcrt_fr OR tcrt_bl OR tcrt_br >= WHITE
+        - maneuverInitiatedByRobot: TRUE nếu bot đang cố tình xuất lệnh đi ngang/xoay (bật trong các state FLANK)
+		- isTargetLost
+		
+IV: FINITE STATE MACHINE
+// Dùng ngôn ngữ logic
+
+// ==========================================
+// [GLOBAL SAFETY LAYER - CAO NHẤT]
+// Chạy trước khi switch(RobotState)
+// ==========================================
+    if (edgeDetect == TRUE) {
+        force STATE_DEF_EDGE_AVOID;
+    } 
+    else if (fallOut == TRUE) {
+        force STATE_DEF_LAST_STAND;
+    }
+    else if (beingLifted == TRUE) {
+        force STATE_DEF_ANTI_LIFT;
+    }
+    else {
+        // Run Normal FSM (switch case dưới đây)
+    }
+
+// ==========================================
+// [NORMAL FSM]
+// ==========================================
+	INIT
+		STATE_IDLE
+			- Hành động: Dừng motor. Liên tục build histogram 50 samples gần nhất (1s @50Hz) để lưu Initial Enemy Direction. Khoá cứng state này.
+			- Chuyển trạng thái: Khi cảm biến chạm TTP223 từ 0 lên 1 trong vòng tối thiểu TTP_INIT -> chuyển sang STATE_INIT_DELAY
+			
+		STATE_INIT_DELAY
+			- Điều kiện: được gọi từ STATE_IDLE
+			- Hành động: Dừng motor chờ theo luật. Tính median data từng sensor, duy trì histogram của 10 samples cuối. Khoá cứng state trong đúng 3s
+			- Chuyển trạng thái: Hết 3s -> Chọn sector mục tiêu dựa vào mode (giá trị xuất hiện nhiều nhất) của histogram -> chuyển state sang ATTACK hoặc SEARCH tương ứng
+			
+	DEFENSE
+		STATE_DEF_EDGE_AVOID
+			- Điều kiện: kích hoạt từ Global Safety Layer
+			- Hành động:
+				+ tcrt_fl >= WHITE -> lùi phải
+				+ tcrt_fr >= WHITE -> lùi trái
+				+ tcrt_bl >= WHITE -> tiến phải
+				+ tcrt_br >= WHITE -> tiến trái
+				+ tcrt_fl AND tcrt_FR >= WHITE -> lùi thẳng
+				+ tcrt_bl AND tcrt_br >= WHITE -> tiến thẳng
+			- Chuyển trạng thái: tcrt_fl AND tcrt_fr AND tcrt_bl AND tcrt_BR < WHITE + Duy trì PWM ngược đó thêm 50-100ms -> STATE_REC_RECOVER (không nhảy thẳng qua search để tránh bay đài lần 2)
+	
+		STATE_DEF_LAST_STAND
+			- Điều kiện: Kích hoạt từ Global Safety Layer
+			- Hành động:
+				+ Nếu pitch nghiên chúi xuống -> Lùi lại
+				+ Nếu pitch ngữa lên -> Tiến lên
+				+ Nếu roll lệch mạnh -> Lùi trái/phải nghịch hướng nghiêng của IMU
+			- Chuyển trạng thái: Khi IMU pitch/roll trở về tiệm cận 0 (phẳng) AND fallOut == FALSE -> STATE_REC_RECOVER
+				
+		STATE_DEF_ANTI_LIFT
+			- Điều kiện: Kích hoạt từ Global Safety Layer
+			- Hành động: xả ngẫu nhiên 1 trong 2 chuỗi xích động học: [Lùi trái] hoặc [Lùi phải] để làm trượt trọng tâm đối thủ. Nếu beingLifted == FALSE -> STATE_REC_RECOVER (để lùi tiếp một khoảng cách an toàn)
+			
+		STATE_DEF_ANTI_PUSH
+			- Điều kiện: sideDanger == TRUE AND đang tiến thẳng AND IMU đọc gia tốc ngược kéo dài AND thời gian từ lúc đánh STRIKE > IGNORE_ANTI_PUSH (200ms)
+			- Hành động: Cắt throttle ngay lập tức -> Đảo chiều lùi ngắn -> Phân nhánh random: Xoay thoát góc 30-60 OR lùi đánh cung tròn
+			- Chuyển trạng thái: Hoàn thành maneuver (hết timer delay của việc xoay/lùi) -> STATE_REC_RECOVER
+			
+		STATE_DEF_SIDE_GUARD
+			- Điều kiện: impactDetected == TRUE (lần đầu) WHILE (d-90 OR d+90 < WARN_DIST) AND enemy_angle thuộc s_far_left/right AND maneuverInitiatedByRobot == FALSE
+			- Hành động: Tiến/Lùi random theo hướng ngược lại với sensor góc đang bị trigger để né vector lực của đối thủ
+			- Chuyển trạng thái: Xong maneuver -> Nhảy sang STATE_ATK_LOCK (quay mặt lại phản công ngay hướng vừa bị tạt) HOẶC STATE_REC_RECOVER
+			
+		STATE_DEF_REAR_GUARD
+			- Điều kiện: impactDetected == TRUE WHILE (d0>CONF_ENY) AND enemy_angle ≈180
+			- Hành động: Bơm ga tiến lên theo cung tròn để thoát lực đẩy
+			- Chuyển trạng thái: Nếu flkPossible == TRUE -> Chuyển sang state ATTACK tương ứng. Nếu FALSE -> STATE_REC_RECOVER
+			
+	ATTACK
+		STATE_ATK_LIFT
+			- Điều kiện: liftDetected == TRUE
+			- Hành động: Full Push 
+			- Chuyển trạng thái:liftDetected == FALSE -> STATE_ATK_STRIKE hoặc STATE_SEARCH_ENEMY
+			
+		STATE_ATK_LOCK
+			- Điều kiện: Target acquisition từ các nhánh FLANK hoặc PREP
+			- Hành động: Align heading qua Gyro PID. PWM 40-60%
+			- Chuyển trạng thái: 
+				+ Mất dấu (d0 > CONF_ENY) -> Reset lock_retries, STATE_SEARCH_ENEMY
+                + Căn góc xong OR timeout ATK_LOCK_TIME -> Tăng lock_retries++, ép chuyển STATE_ATK_STRIKE
+                + Nếu lock_retries >= MAX_LOCK_RETRIES -> Reset lock_retries, ép chuyển STATE_SEARCH_ENEMY
+			
+		STATE_ATK_STRIKE
+			- Điều kiện: d0 < WARN_DIST AND enemy_angle ∈ s_front AND (closingFast == TRUE OR flkPossible == FALSE) AND sideDanger == FALSE
+			- Hành động:
+				+ Set biến thời gian ghi nhận STRIKE (để kích hoạt mù IGNORE_ANTI_PUSH 200ms)
+                + Brust-Test: Đẩy PUSH_MS -> Giữ HOLD_PUSH_MS.
+                + Đo lường Odom/IMU trong 4s: Bị dội ngược -> ANTI_PUSH; Ủi được -> Full thrust; Đối thủ xoay -> Lướt ngang đánh hông.
+			- Chuyển trạng thái: 
+                + Nếu ủi thành công d0 < STRIKE_DIST -> Reset lock_retries.
+                + Interrupt: d0 đột ngột tăng -> Quay lại STATE_ATK_LOCK.
+					
+		STATE_ATK_FEINT
+			- Điều kiện: closingFast == FALSE AND flkPossible == TRUE
+			- Hành động: đẩy thẳng 0.4s -> đột ngột bẻ gắt 45 để bắt góc chết (Set maneuverInitiatedByRobot = TRUE)
+			- Chuyển trạng thái: Chuyển thẳng sang STATE_ATK_FLANK_SIDE.
+			
+		STATE_ATK_DELAY_RUSH
+			- Điều kiện: d0<WARN_DIST AND closingFast == FALSE AND flkPossible == FALSE AND NOT sideDanger AND khoảng cách distance ổn định
+			- Hành động: Khoá chết heading. Băm PWM. T_wait = clamp(0.05, 0.4 - v_e/1000, 0.4)
+			- Chuyển trạng thái: losingFast == TRUE hoặc hết T_wait an toàn -> STATE_ATK_STRIKE
+			
+		STATE_ATK_FLANK_FRONT
+            - Điều kiện: d0<CONF_ENY AND enemy_angle ∈ (s_front_left .. s_front_right) AND flkPossible == TRUE
+            - Hành động: Tiến thẳng kẹp offset +-15. Set maneuverInitiatedByRobot = TRUE. impactDetected -> Full push
+            - Chuyển trạng thái: 
+                + enemy_angle trôi dạt -> STATE_ATK_FLANK_SIDE
+                + Đang Full Push mà d0 > CONF_ENY -> STATE_REC_RECOVER hoặc SEARCH
+            
+        STATE_ATK_FLANK_SIDE
+            - Điều kiện: (d-45 OR d+45 OR d-90 OR d+90 <CONF_ENY) AND flkPossible == TRUE AND edgeDetect == FALSE
+            - Hành động: Vừa quay vừa tiến sang hướng tạt. Set maneuverInitiatedByRobot = TRUE. impactDetected -> Full push
+            - Chuyển trạng thái: Đang Full Push mà hụt -> STATE_REC_RECOVER hoặc SEARCH
+            
+        STATE_ATK_FLANK_REAR
+            - Điều kiện: (d-90 OR d+90 <CONF_ENY) AND (d0>CONF_ENY) AND enemy_angle ∈ (±120∘…180∘) AND impactDetected == FALSE
+            - Hành động: Xoay gắt. Nếu v_e ≈ 0 -> bơm ga chạy cung 1/4 (Set maneuverInitiatedByRobot = TRUE).
+            - Chuyển trạng thái: Chạy cung mà mất dấu -> STATE_SEARCH_ENEMY. Đối thủ quay mặt lại -> STATE_ATK_LOCK.
+			
+	RECOVERY / SEARCH
+		STATE_SEARCH_ENEMY
+            - Điều kiện: mất dấu, timeout
+            - Hành động: Arc-Sweep hoặc Spiral/Widen
+            - Chuyển trạng thái: d0<CONF_ENY → STATE_ATK_LOCK. d±45 hoặc d±90 < CONF_ENY → STATE_ATK_FLANK_SIDE
+            
+        STATE_REC_RECOVER
+            - Điều kiện: gọi sau khi hoàn thành DEFENSE / Né đòn
+            - Hành động: Đánh lùi 10-15cm -> Xoay random -> rescan môi trường.
+            - Chuyển trạng thái: 
+                + Interrupt từ Global Safety: edgeDetect == TRUE -> STATE_DEF_EDGE_AVOID.
+                + Hết thời gian MAX_RECOVER_TIME (800ms) -> Cưỡng chế SEARCH.
+                + Exit an toàn: Phải qua EDGE_TIMEOUT (150ms) KHÔNG chạm vạch trắng -> Nếu có d < WARN_DIST -> nhảy ATTACK. Không có -> STATE_SEARCH_ENEMY.

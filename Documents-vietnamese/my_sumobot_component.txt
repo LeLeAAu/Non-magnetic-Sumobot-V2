@@ -1,0 +1,83 @@
+-> Lưỡi ủi phải đến mức cạo mặt sàn, phải mài thật sắc, ép sát sàn (dùng băng dính Teflon) để đảm bảo 100% khi cụng đầu, xe mình chui xuống xe nó
+-> Rửa lốp bằng cồn hoặc nước lau kính trước mỗi trận đấu để tẩy bụi
+
+5x VL53L1X
+	25x15.6mm
+	2g each
+	nối chung SDA và SCL của tất cả 5 cảm biến vào 2 dây duy nhất -> 2 chân 2IC
+	5 chân GPIO điều khiển XSHUT riêng biệt
+	
+	
+5x TCRT5000
+	10.2 x 5.8 x 7mm
+	~7 g each
+	
+shangyi 1500mAh 45C 3S
+	 22mm x 35mm x 73mm
+	 150g
+	
+2x 5840-31zy Worm Gear
+	115x54x34mm
+	355g each
+	
+2x BTS7960
+	40x50x12mm
+	20g each
+	dùng dây cắm nối chập R_EN và L_EN lại với nhau, rồi nối thẳng lên nguồn 3.3V (hoặc 5V logic)
+	
+DOIT ESP32 CH340 30P  (VIN, 2x GND, 3V3, EN, VP, VM, TX0, RX0, RX2, TX2, D2, D4, D5, D18, D19, D21, D22, D23, D12->15, D12, D13, D14, D25, D26, D27, D32->D35)
+mini560 PRO - 3.3V and mini560 PRO - 5V
+	29x18x5.4mm
+	6g
+	
+Gy-lsm6ds3  
+	13x18
+	2g
+	0x6B
+	
+	
+TTP223
+	24x24
+	
+0.96LED
+	
+	
+tụ 470uF/25V
+	// đường kính x cao
+	10x12.5mm
+	1.5g
+	
+tụ 0.1uF
+	3.2x1.6
+	0.1g
+	
+tụ 1000uF
+	10x20mm
+	2g
+	
+Điện trở
+	
+Công tắc bập bênh KCD1
+	21x15 (mặt ngoài) - 19x13 (lỗ cắt lắp đặt)
+	3g
+	
+Bánh xe robot V2 65m bằng cao su Đường kính: 65mm. Bề rộng: 27mm Khớp lục giác: 12mm
+
+// Nối 2 tụ 0.22uF ở mỗi đầu chân âm dương mỗi động cơ ra vỏ kim loại - vỏ kim loại sẽ đóng vai trò như lồng faraday
+
+	
+Khung PETG ~ 230g
+VL53L1X tổng 10g
+TCRT5000 tổng 2.5g
+shangyi 150g
+5840-31zy Worm Gear 710g
+BTS7960 tổng 40g
+DOIT ESP32 CH340 30P 12g
+mini560 PRO tổng 12g
+Gy-lsm6ds3 2g
+TTP223 xanh lớn cho là 5g
+Bánh xe robot V2 65mm cho là 60g
+Công tắc bập bênh KCD1 cho là 3g
+Các tụ điện điện trở cho là 20g
+Dây dợ không rõ.
+
