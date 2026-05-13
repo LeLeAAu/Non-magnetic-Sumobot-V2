@@ -1,6 +1,6 @@
 // IMPORTANT!!!: The following information only applies to opponents at UTC
 // Rare does not mean good
-// At UTC, even Rare or Epic is already used by only about 1%
+// At UTC, even Rare or Epic is already used by only about 5%
 I. Overview of opponent designs
     - Most opponents in Sumo Robot matches tend to use relatively traditional designs, focusing more on practical combat effectiveness rather than complex algorithms. Most of their strategies rely on detecting the opponent in front and pushing them directly out of the arena.
 
@@ -20,6 +20,7 @@ II. Distance Sensor Systems (Opponent “Vision”)
             FRS04,
             HC-SR05,
             JSN-SR04T,
+			RCWL1601,
             AJ-SR04M...
         Rarity:
             Common (very widespread, seen in about 80% of student robots)
@@ -75,8 +76,7 @@ II. Distance Sensor Systems (Opponent “Vision”)
     4. Industrial-grade Sensor Group
         Common models:
             CDD-40N,
-            E3F-20C1,
-            RCWL1601...
+            E3F-20C1
         Rarity:
             Mythic (~0% usage, no one at UTC has been seen using them yet)
 
@@ -151,25 +151,46 @@ III. Opponent Detection Sensor Layout (Sensor Layout & Blind Spots)
             Designed for robots with very strong spin or pivot capabilities.
             Very difficult to predict and counter.
 
-    8. Front-Heavy Focus Layout (0°, ±15°, ±30°)
-        Tactical meaning:
-            Sacrifices side vision to concentrate 100% of sensing capability at the front.
-            Usually paired with strong target tracking algorithms.
-            The opponent is essentially turning their robot into a heat-seeking missile.
-            Commonly used on wedge-focused designs.
+    8. Front-Heavy Focus Cluster (0°, ±15°, ±30°)
+        Rarity:
+            Legendary
+        Strategic Meaning:
+            Sacrifices side vision to concentrate 100% of the radar firepower toward the front.
+            This layout is commonly paired with extremely advanced target-tracking algorithms.
+            The opponent wants to turn their robot into a heat-seeking missile.
+            Usually applied to sharp, wedge-shaped bot designs.
 
-    9. Front-Heavy-Max Swirl Layout (0°, ±10°, ±20°, ±30°)
-        Tactical meaning:
-            The most extreme variation of the focused layout.
-            Provides ultra-dense front scanning to ensure your robot stays centered in the opponent’s wedge.
-            Opponents using this layout likely have very strong FSM and PID implementations to optimize attack angles.
-            Avoid direct frontal engagement whenever possible.			
+	9. Front-Heavy-Max Vortex (0°, ±10°, ±20°, ±30°)
+			Rarity:
+				Legendary
+			Strategic Meaning:
+				The most extreme variant of the Focus Cluster layout.
+				Performs ultra-fine scanning across the entire front area to ensure your robot always stays centered under the enemy's scoop.
+				Teams using this layout almost certainly have highly refined FSM and PID implementations to optimize attack angles.
+				Avoid direct frontal engagements at all costs.
+
+	10. Comprehensive 7-Sensor Layout (0°, ±45°, ±45° Wide-Angle, ±90°)
+			Rarity:
+				Legendary
+			Characteristics:
+				Features 1 center sensor, 2 narrow diagonal tracking sensors, 2 corner-scanning sensors, and 2 side sensors.
+			Strategic Meaning:
+				Ensures that every possible attack direction is monitored, especially close-range side blind spots.
+				The narrow ±45° sensors can also be cross-angled so their beams cover a larger area at close range.
+
+	11. 11-Sensor Layout
+			Rarity:
+				God-tier
+			Characteristics:
+				Uses up to 11 sensors distributed around the robot chassis.
+				Was employed by a Romanian team in a professional tournament.
+			Strategic Meaning:
+				Completely eliminates blind spots.
+				No matter where you are within the scan range, the robot can instantly detect and react to your presence.			
 		
 		
 IV. Edge Detection System (Emergency brake to prevent ring-out)
-
     1. Edge Sensor Types
-
         Entry-level group (TCRT5000):
             Rarity:
                 Common
@@ -177,7 +198,6 @@ IV. Edge Detection System (Emergency brake to prevent ring-out)
                 Large modules, bulky, easy to install.
             Critical weakness:
                 Extremely sensitive to ambient light.
-
         Mid-range group (ST188, QRD1114, RPR-220, CNY70):
             Rarity:
                 Uncommon
@@ -185,7 +205,6 @@ IV. Edge Detection System (Emergency brake to prevent ring-out)
                 More compact
                 Slightly better current characteristics and sensitivity than TCRT5000
                 Often integrated into custom PCBs mounted directly under the chassis to save space.
-
         High-end group (Pololu QTR-1A):
             Rarity:
                 Epic
@@ -194,9 +213,8 @@ IV. Edge Detection System (Emergency brake to prevent ring-out)
                 Very compact
                 Extremely fast response time and strong ambient light noise immunity.
                 Designed for high-speed competitions.
-
+				
     2. Edge Sensor Layout
-
         Single Front Layout (1× Front)
             Rarity:
                 Common (the most "naive" layout).
@@ -205,7 +223,7 @@ IV. Edge Detection System (Emergency brake to prevent ring-out)
             Critical weakness:
                 If the robot is reversing or pushed from behind, it may fall off the arena without resistance.
                 During diagonal attacks, the wheels may already be outside before the center sensor detects the boundary.
-
+				
         Longitudinal Dual Layout (1× Front + 1× Behind)
             Rarity:
                 Uncommon
@@ -215,7 +233,7 @@ IV. Edge Detection System (Emergency brake to prevent ring-out)
             Critical weakness:
                 The sides of the wheels remain blind spots.
                 If hit from the side (90-degree impact) and pushed sideways out of the arena, this system becomes ineffective.
-
+				
         Dual Corner Layout (1× Front Left + 1× Front Right)
             Rarity:
                 Common (current meta, most popular layout).
@@ -225,7 +243,7 @@ IV. Edge Detection System (Emergency brake to prevent ring-out)
                 When one sensor detects the boundary, the controller can pivot the robot back toward the arena center.
             Critical weakness:
                 Rear vulnerability remains. Reversing is still dangerous.
-
+				
         Four-Corner Layout (1× Front Left + 1× Front Right + 1× Rear Left + 1× Rear Right)
             Rarity:
                 Epic

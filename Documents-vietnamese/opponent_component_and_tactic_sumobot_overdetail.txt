@@ -1,6 +1,6 @@
 // IMPORTANT!!!: Thông tin sau chỉ áp dụng cho đối thủ ở trường UTC
 // Hiếm không đồng nghĩa với tốt
-// Ở UTC thì ngay cả Rare hoặc Epic đã là gần như chỉ 1% dùng r
+// Ở UTC thì ngay cả Rare hoặc Epic đã là gần như chỉ 5% dùng thôi
 I. Tổng quan về thiết kế đối thủ 
 	- Đa số đối thủ trong các trận Sumo Robot thường sử dụng thiết kế tương đối truyền thống, tập trung vào hiệu quả thực chiến hơn là thuật toán phức tạp. Phần lớn chiến thuật của họ dựa vào phát hiện đối thủ phía trước và đẩy trực diện ra khỏi sân.
 
@@ -20,6 +20,7 @@ II. Hệ thống Cảm biến khoảng cách (Tầm nhìn của đối thủ)
 			FRS04, 
 			HC-SR05, 
 			JSN-SR04T, 
+			RCWL1601,
 			AJ-SR04M...
         Độ hiếm: 
 			Common (Tràn lan, gặp ở 80% bot sinh viên)
@@ -68,8 +69,7 @@ II. Hệ thống Cảm biến khoảng cách (Tầm nhìn của đối thủ)
     4. Nhóm Cảm Biến Tiêu Chuẩn Công Nghiệp
         Các mã phổ biến: 
 			CDD-40N, 
-			E3F-20C1, 
-			RCWL1601...
+			E3F-20C1
         Độ hiếm: Mythic (~0% sử dụng, trường UTC chưa thấy pháp sư nào mang vào)
         Đặc điểm:
             Độ tin cậy tuyệt đối, sinh ra để chạy trong nhà máy.
@@ -80,7 +80,7 @@ II. Hệ thống Cảm biến khoảng cách (Tầm nhìn của đối thủ)
             Overkill với một sân chơi tốc độ cao cần sự linh hoạt.
 
 III. Bố trí cảm biến phát hiện đối thủ (Sensor Layout & Blind Spots)
-
+	* Cốt lõi: luôn ưu tiên sử dụng số lượng cảm biến lẻ (3, 5, 7,...). 
     1. Layout "Tự Hủy" (0°)
         Độ hiếm: 
 			Common (Thường gặp ở các mầm non năm nhất đi thi cho có phong trào)
@@ -141,6 +141,8 @@ III. Bố trí cảm biến phát hiện đối thủ (Sensor Layout & Blind Spo
 			Cực kỳ khó chịu và khó bị bắt bài.
 
     8. Tụ Tiêu Front-Heavy (0°, ±15°, ±30°)
+		Độ hiếm: 
+			Legendary
         Ý nghĩa chiến thuật:
             Từ bỏ tầm nhìn hai bên, dồn 100% hỏa lực radar về phía mũi xe.
             Layout này thường đi kèm thuật toán bám mục tiêu (Tracking) siêu việt. 
@@ -148,16 +150,32 @@ III. Bố trí cảm biến phát hiện đối thủ (Sensor Layout & Blind Spo
 			Thường ứng dụng cho bot thiết kế nhọn.
 
     9. Lốc Xoáy Front-Heavy-Max (0°, ±10°, ±20°, ±30°)
+		Độ hiếm:
+			Legendary
         Ý nghĩa chiến thuật:
             Biến thể cực đoan nhất của Tụ Tiêu. 
 			Quét siêu nhuyễn mặt trước để đảm bảo vị trí tương đối của xe bạn luôn nằm ở chính giữa gầm xúc của xe địch. 
 			Đối thủ chơi layout này chắc chắn code FSM và PID cực kỳ cứng tay để tối ưu hóa góc đâm. 
 			Tránh đối đầu trực diện bằng mọi giá.
 			
+	10. Layout 7 Cảm biến toàn diện (0°, ±45°, ±45° góc rộng, ±90°)
+		Độ hiếm: 
+			Legendary
+		Đặc điểm: 
+			Bố trí 1 cảm biến trung tâm, 2 cảm biến góc chéo hẹp để bám đuổi, 2 cảm biến quét góc (corners) và 2 cảm biến ở hai bên sườn (sides).
+		Ý nghĩa chiến thuật: 
+            Đảm bảo tất cả các khu vực đối thủ có thể tấn công đều được giám sát, đặc biệt là các góc chết sát sườn. Có thể bố trí bắt chéo góc +-45 độ hẹp để tia quét bao phủ vùng diện tích lớn hơn ở cự ly gần.
 		
+	11. Layout 11 Cảm biến
+		Độ hiếm:
+			God-tier
+		Đặc điểm:
+			Sử dụng tới 11 cảm biến bố trí quanh thân xe.
+			Được một đội Romania sử dụng ở giải đấu chuyên nghiệp.
+		Ý nghĩa chiến thuật:
+			Triệt tiêu hoàn toàn mọi điểm mù. Dù bạn đứng ở bất kỳ đâu trong phạm vi quét, robot đều nhận diện được để phản ứng ngay lập tức.
 		
 IV. Hệ thống Cảm biến biên - Edge Detection (Phanh khẩn cấp chống rớt đài)
-
     1. Các dòng Cảm Biến Dò Lai
         Nhóm Phổ Thông (TCRT5000):
             Độ hiếm: 
@@ -326,7 +344,7 @@ VII. Phân loại chiến thuật thi đấu
 			Common (Gặp nhan nhản)
         Đặc điểm & Trang bị:
             Sử dụng motor có lực kéo (Torque) cực lớn, chấp nhận hy sinh tốc độ di chuyển.
-            occho logic: thấy làm đâm
+            occho logic: thấy là đâm
         Chiến thuật (FSM): Scan (Dò) -> Detect (Thấy) -> Rush forward (Cắm đầu chạy) -> Push (Ủi tới chết).
         Điểm yếu chí mạng & Khai thác:
             Sự lù đù: Gia tốc góc rất thấp, quay đầu cực kỳ chậm chạp.
