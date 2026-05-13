@@ -79,8 +79,8 @@ const float R_SIDE_MARGIN = 50.0;       // Khoảng cách an toàn margin (mm)
 const float R_SIDE = BOT_HALF_WIDTH + R_SIDE_MARGIN;
 const float PITCH_TH = 15.0;         // Ngưỡng góc nghiêng (độ) để xác định xe bị hất/rơi
 const float ACC_IMPACT_TH = 0.6;     // Ngưỡng gia tốc (G) để nhận diện va chạm mạnh
-const float SENSOR_SIN[5] = {0.0, -0.7071, 0.7071, -1.0, 1.0};
-const float SENSOR_COS[5] = {1.0,  0.7071, 0.7071,  0.0, 0.0};
+const float SENSOR_SIN[5] = {0.0, -0.7071, 0.7071, -1.0, 1.0}; // Lookup table
+const float SENSOR_COS[5] = {1.0,  0.7071, 0.7071,  0.0, 0.0}; // Lookup table
 const float V_EMA_ALPHA = 0.25;         // Hệ số lọc EMA cho vận tốc tiếp cận (0.0 -> 1.0)
 const float V_DEADBAND_MM = 5.0;        // Deadband loại bỏ nhiễu rung li ti
 
@@ -1453,43 +1453,34 @@ void drawCurrentFace() {
 
 void showLoading() {
     int cx = 64;
-    int cy = 12; // Hạ tâm xuống 1 tí để cân bằng với text
-
-    int r[3] = {4, 8, 12}; // 3 quỹ đạo
-    float speeds[3] = {0.25, -0.15, 0.1}; // Vận tốc & hướng quay độc lập (Parallax)
+    int cy = 14; // Canh giữa trục y (giả sử màn 128x32 hoặc dùng phần trên của 128x64)
 
     // ==================================================
-    // PHASE 1: GYROSCOPE ORBIT (Con quay hồi chuyển)
+    // PHASE 1: NGÔI SAO XOAY (Spinning Star)
     // ==================================================
-    for (int frame = 0; frame < 80; frame++) {
+    for (int frame = 0; frame < 60; frame++) {
         display.clearDisplay();
 
-        // 1. Vẽ 3 quỹ đạo tĩnh
-        for (int i = 0; i < 3; i++) {
-            display.drawCircle(cx, cy, r[i], SSD1306_WHITE);
+        float angle = frame * 0.15; // Tốc độ xoay
+
+        // Vẽ ngôi sao 8 cánh (4 dài, 4 ngắn) bằng lượng giác
+        for (int i = 0; i < 4; i++) {
+            // Cánh dài
+            float a1 = angle + i * (PI / 2.0);
+            display.drawLine(cx, cy, cx + cos(a1) * 10, cy + sin(a1) * 10, SSD1306_WHITE);
+            // Cánh ngắn xen kẽ
+            float a2 = angle + (i * PI / 2.0) + (PI / 4.0);
+            display.drawLine(cx, cy, cx + cos(a2) * 5, cy + sin(a2) * 5, SSD1306_WHITE);
         }
 
-        // 2. Vẽ 3 vệ tinh quay với tốc độ trượt nhau
-        for(int i = 0; i < 3; i++) {
-            // Lệch pha ban đầu + Tốc độ riêng biệt từng vòng
-            float angle = (frame * speeds[i]) + (i * PI / 2.0); 
-            int px = cx + cos(angle) * r[i];
-            int py = cy + sin(angle) * r[i];
-            
-            display.fillCircle(px, py, 1, SSD1306_WHITE); // Chấm nhỏ 1px trông sắc nét (sleek) hơn
-        }
-
-        // 3. Xử lý chữ Loading tự động căn giữa siêu mượt
-        int dots = (frame / 10) % 4;
+        // Chữ Loading với dấu chấm động
+        int dots = (frame / 8) % 4;
         char loadStr[15] = "Loading";
-        for (int d = 0; d < dots; d++) {
-            strcat(loadStr, "."); // Cấp phát thêm dấu chấm
-        }
+        for (int d = 0; d < dots; d++) strcat(loadStr, ".");
         
-        int textWidth = strlen(loadStr) * 6; // Tính lại chiều rộng mỗi frame
+        int textWidth = strlen(loadStr) * 6;
         display.setTextSize(1);
-        display.setTextColor(SSD1306_WHITE);
-        display.setCursor(64 - (textWidth / 2), 24); // Ép căn giữa tuyệt đối
+        display.setCursor(64 - (textWidth / 2), 26);
         display.print(loadStr);
 
         display.display();
@@ -1497,89 +1488,113 @@ void showLoading() {
     }
 
     // ==================================================
-    // PHASE 2: GRAVITY COLLAPSE (Sụp đổ hố đen)
+    // PHASE 2: PHÌNH TO VÀ SỤP ĐỔ (Swell & Collapse)
     // ==================================================
-    for(int step = 0; step <= 12; step += 2) { 
+    // 2.1 Phình to (Swell)
+    for (int r = 10; r <= 24; r += 4) {
         display.clearDisplay();
-        
-        // Các vòng tròn co rút về tâm với tốc độ khác nhau
-        if (r[2] - step > 0) display.drawCircle(cx, cy, r[2] - step, SSD1306_WHITE);
-        if (r[1] - step/1.5 > 0) display.drawCircle(cx, cy, r[1] - step/1.5, SSD1306_WHITE);
-        if (r[0] - step/3 > 0) display.drawCircle(cx, cy, r[0] - step/3, SSD1306_WHITE);
-        
-        display.fillCircle(cx, cy, 2, SSD1306_WHITE); // Giữ Core ở giữa
-
-        // Vẽ lại chữ tĩnh
-        display.setTextSize(1);
-        display.setCursor(64 - (10 * 6) / 2, 24);
-        display.print("Loading...");
+        display.fillCircle(cx, cy, r, SSD1306_WHITE);
         display.display();
-        
-        delay(30); 
+        delay(25);
+    }
+
+    // 2.2 Sụp đổ thành hố đen (Collapse)
+    int bh_radius = 6; // Bán kính hố đen
+    for (int r = 24; r >= bh_radius; r -= 6) {
+        display.clearDisplay();
+        display.fillCircle(cx, cy, r, SSD1306_WHITE); 
+        display.drawCircle(cx, cy, r + 4, SSD1306_WHITE); // Vòng event horizon bốc hơi
+        display.display();
+        delay(30);
     }
 
     // ==================================================
-    // PHASE 3: CORE SHOCKWAVE & FLASH
+    // PHASE 3: DỊCH CHUYỂN HỐ ĐEN & HIỆN TEXT (Shift Left)
     // ==================================================
-    // Sóng xung kích bung ra
-    for (int fw = 2; fw <= 24; fw += 6) {
+    int bh_x = cx;
+    int target_bh_x = 24;
+    int text_x = 128; // Giấu text ngoài lề phải
+
+    for (int step = 0; step <= 20; step++) {
         display.clearDisplay();
-        display.drawCircle(cx, cy, fw, SSD1306_WHITE);
-        display.fillCircle(cx, cy, fw/3, SSD1306_WHITE); // Lõi phình to dần
+        
+        // Hố đen trượt sang trái
+        bh_x = cx - (step * ((cx - target_bh_x) / 20.0));
+        display.fillCircle(bh_x, cy, bh_radius, SSD1306_WHITE);
+        display.drawCircle(bh_x, cy, bh_radius + 2, SSD1306_WHITE); // Ánh sáng quanh hố đen
+
+        // Text "Complete" lướt từ phải vào
+        if (step > 10) {
+            text_x = 128 - ((step - 10) * 6); // Trượt dần tới tọa độ x ~ 68
+            display.setCursor(text_x, cy - 3);
+            display.print("Complete");
+        }
+
         display.display();
-        delay(15);
+        delay(20);
     }
-    
-    // Cyber Flash (Invert đảo màu toàn bộ điểm ảnh trên OLED)
+
+    // ==================================================
+    // PHASE 4: INVERT, "<<<" XOÁ HỐ ĐEN & ĐƯA TEXT RA GIỮA
+    // ==================================================
+    // Flash Invert
     display.invertDisplay(true); 
-    delay(80); // Lóa mắt trong 80ms
-    display.invertDisplay(false); // Trả lại bình thường
-    display.clearDisplay();
-    display.display();
-    delay(200); // Blackout nghỉ lấy đà
+    delay(100); 
+    display.invertDisplay(false);
 
-    // ==================================================
-    // PHASE 4: TACTICAL HUD BOOT (System Ready)
-    // ==================================================
-    for(int blink = 0; blink < 3; blink++) { 
+    int final_text_x = 64 - (8 * 6) / 2; // Căn giữa chữ "Complete" (8 kí tự * 6px / 2 = 24 -> x=40)
+    int current_text_x = text_x;
+
+    // Dải quét "<<<" đi từ phải (128) qua trái (-30)
+    for (int sweep = 128; sweep >= -30; sweep -= 8) {
         display.clearDisplay();
         
-        // Vẽ thanh Header trên cùng
-        display.fillRect(0, 0, 128, 7, SSD1306_WHITE);
-        display.setTextColor(SSD1306_BLACK); // Chữ đen trên nền trắng
-        display.setCursor(2, 0);
-        display.print("OS_BOOT");
+        // Hố đen chỉ tồn tại nếu dải quét chưa đè qua nó
+        if (sweep > bh_x) {
+            display.fillCircle(bh_x, cy, bh_radius, SSD1306_WHITE);
+            display.drawCircle(bh_x, cy, bh_radius + 2, SSD1306_WHITE);
+        }
 
-        // Vẽ viền HUD
-        display.drawRect(0, 8, 128, 24, SSD1306_WHITE);
-        
-        // Chữ System Ready
-        display.setTextColor(SSD1306_WHITE);
-        display.setCursor(16, 16);
-        display.print("[ SYSTEM READY ]");
-        
-        display.display();
-        delay(300); // Sáng lâu, uy lực
+        // Vẽ mũi tên quét
+        display.setCursor(sweep, cy - 3);
+        display.print("<<<");
 
-        display.clearDisplay();
+        // Đẩy text "Complete" ra giữa đồng bộ với dải quét
+        if (sweep < 100 && current_text_x > final_text_x) {
+            current_text_x -= 4; // Tốc độ trượt text
+            if (current_text_x < final_text_x) current_text_x = final_text_x; // Ép vào tâm
+        }
         
-        // Khung HUD giữ nguyên, chỉ chữ chớp tắt
-        display.fillRect(0, 0, 128, 7, SSD1306_WHITE);
-        display.setTextColor(SSD1306_BLACK);
-        display.setCursor(2, 0);
-        display.print("OS_BOOT");
-        display.drawRect(0, 8, 128, 24, SSD1306_WHITE);
-        
+        display.setCursor(current_text_x, cy - 3);
+        display.print("Complete");
+
         display.display();
-        delay(80); // Tối nhanh
+        delay(25);
     }
 
-    // Chốt khung hình, chuẩn bị vào trận
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(16, 16);
-    display.print("[ SYSTEM READY ]");
+    // ==================================================
+    // PHASE 5: CHỐT KHUNG - CHUẨN BỊ VÀO TRẬN (System Ready)
+    // ==================================================
+    display.clearDisplay();
+    
+    // Viền ngắm mục tiêu (Targeting Brackets) cực chiến
+    display.drawLine(20, cy - 8, 30, cy - 8, SSD1306_WHITE);
+    display.drawLine(20, cy - 8, 20, cy - 2, SSD1306_WHITE);
+    
+    display.drawLine(108, cy - 8, 98, cy - 8, SSD1306_WHITE);
+    display.drawLine(108, cy - 8, 108, cy - 2, SSD1306_WHITE);
+    
+    display.drawLine(20, cy + 8, 30, cy + 8, SSD1306_WHITE);
+    display.drawLine(20, cy + 8, 20, cy + 2, SSD1306_WHITE);
+    
+    display.drawLine(108, cy + 8, 98, cy + 8, SSD1306_WHITE);
+    display.drawLine(108, cy + 8, 108, cy + 2, SSD1306_WHITE);
+
+    display.setCursor(final_text_x, cy - 3);
+    display.print("COMPLETE");
     display.display();
-    delay(1500); 
+    
+    delay(1500); // Giữ frame để ngắm
 }
 
 // 5. SETUP & LOOP

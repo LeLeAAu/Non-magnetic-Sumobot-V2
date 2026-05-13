@@ -10,9 +10,6 @@ I. Tổng quan về thiết kế đối thủ
 		+ Trọng tâm dồn về phía trước để tăng lực đẩy
 		+ Phần sau thường ít được bảo vệ hơn
 		+ Điều này tạo ra các điểm yếu phổ biến ở hai bên và phía sau robot.
-		
-// IMPORTANT!!!: Thông tin sau chỉ áp dụng cho đối thủ ở trường UTC
-// Hiếm không đồng nghĩa với tốt
 
 II. Hệ thống Cảm biến khoảng cách (Tầm nhìn của đối thủ)
 

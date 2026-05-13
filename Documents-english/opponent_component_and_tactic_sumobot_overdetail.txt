@@ -11,9 +11,6 @@ I. Overview of opponent designs
         + The rear is usually less protected
         + This creates common weak points on both sides and the rear of the robot.
 
-// IMPORTANT!!!: The following information only applies to opponents at UTC
-// Rare does not mean good
-
 II. Distance Sensor Systems (Opponent “Vision”)
 
     1. Ultrasonic Sensor Group

@@ -8,8 +8,7 @@ I. Tổng quan đối thủ
 	  + Bên trái
 	  + Bên phải
 	  + Hai góc sau
-	  + Phía sau	  
-	  thường không được bảo vệ tốt
+	  + Phía sau thường không được bảo vệ tốt
 	Điều này tạo ra các điểm yếu khi bị tấn công từ:
 	- Hai bên
 	- Phía sau
