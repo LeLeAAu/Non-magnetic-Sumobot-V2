@@ -1,8 +1,6 @@
 #include "Config.h"
 #include "MotorControl.h"
-#include "DisplayFace.h"
-#include "SensorTask.h"
-#include "FSMTask.h"
+#include <Arduino.h>
 
 void setMotors(int leftSpeed, int rightSpeed) {
     // Ràng buộc giới hạn an toàn

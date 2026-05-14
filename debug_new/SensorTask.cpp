@@ -1,8 +1,9 @@
-#include "Config.h"
-#include "MotorControl.h"
-#include "DisplayFace.h"
 #include "SensorTask.h"
-#include "FSMTask.h"
+#include "Config.h"
+#include <Wire.h>
+#include <VL53L1X.h>
+#include <SparkFunLSM6DS3.h>
+#include <math.h>    
 
 float getEstimatedVelocity(int pwm) {
     // Tránh việc tính toán khi pwm = 0

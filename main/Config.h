@@ -5,8 +5,6 @@
 #include <Wire.h>
 #include <VL53L1X.h>           
 #include <SparkFunLSM6DS3.h>   
-#include <math.h>     
-#include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>    
 
 // 1. PIN MAPPING 

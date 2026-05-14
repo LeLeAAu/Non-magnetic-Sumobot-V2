@@ -1,8 +1,8 @@
+#include "FSMTask.h"
 #include "Config.h"
 #include "MotorControl.h"
-#include "DisplayFace.h"
-#include "SensorTask.h"
-#include "FSMTask.h"
+#include <Arduino.h>   
+#include <math.h>  
 
 float getModeAngle(float* history, int size);
 

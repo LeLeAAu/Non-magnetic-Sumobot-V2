@@ -1,8 +1,8 @@
-#include "Config.h"
-#include "MotorControl.h"
 #include "DisplayFace.h"
-#include "SensorTask.h"
-#include "FSMTask.h"
+#include "Config.h"
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <math.h> 
 
 void drawCurrentFace() {
     display.clearDisplay();
