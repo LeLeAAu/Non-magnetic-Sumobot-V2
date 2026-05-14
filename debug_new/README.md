@@ -1,0 +1,1 @@
+Chỉ dùng để test cái 0.96LED + test qua serial do chưa có đủ linh kiện
