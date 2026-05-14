@@ -1694,7 +1694,7 @@ void loop() {
     static int last_shown_sec = -1;
     static uint32_t last_idle_draw = 0;
 
-    if (currentState == STATE_IDLE) {
+if (currentState == STATE_IDLE) {
         last_shown_sec = -1; // Reset biến đếm ngược
         uint32_t idle_duration = current_time - state_start_time;
 
@@ -1703,31 +1703,48 @@ void loop() {
             display.clearDisplay();
             display.setTextColor(SSD1306_WHITE);
 
+            // 1. LẤY DATA (Dời lên đây để dùng chung cho cả 2 state)
+            SystemData snap;
+            if (dataMutex != NULL) {
+                xSemaphoreTake(dataMutex, portMAX_DELAY);
+                snap = sysData;
+                xSemaphoreGive(dataMutex);
+            }
+
             if (idle_duration < 30000) {  // Dưới 30 giây -> Thức chờ lệnh
                 display.setTextSize(2);
                 display.setCursor(0, 0);
                 display.println("READY...");
                 
                 display.setTextSize(1);
-                // Copy data nhanh để lấy góc in ra màn hình
-                SystemData snap;
-                if (dataMutex != NULL) {
-                    xSemaphoreTake(dataMutex, portMAX_DELAY);
-                    snap = sysData;
-                    xSemaphoreGive(dataMutex);
-                }
                 if (snap.isTargetLost) display.println("Target: LOST");
                 else display.printf("Target: %.1f deg\n", snap.enemy_angle);
 
+                // [OPTION 1] Thêm khoảng cách mắt giữa (D0) vào màn hình READY
+                display.printf("Dist: %d mm\n", snap.dist[0]); 
+
             } else {  // Quá 30 giây -> Lim dim ngủ
+                // 2. VẼ KHUÔN MẶT
                 display.setTextSize(4);
                 display.setCursor(28, 0);
                 display.print("u_u");
+
+                // 3. OVERLAY DỮ LIỆU VLX (Góc trên cùng bên trái)
+                // Ép size nhỏ để tạo cảm giác HUD công nghệ
+                display.setTextSize(1);
+                display.setCursor(0, 0); 
+                // Chỉ hiển thị mắt giữa d[0] cho gọn, màn 128x32 không nhét đủ 5 mắt đâu!
+                if(snap.dist[0] < 2000) {
+                    display.printf("D:%d", snap.dist[0]);
+                } else {
+                    display.print("D:INF");
+                }
             }
+            
             display.display();
             last_idle_draw = current_time;
         }
-    } 
+    }
     else if (currentState == STATE_INIT_DELAY) {
         // Vẽ đếm ngược 3 -> 2 -> 1
         uint32_t elapsed = current_time - state_start_time;
