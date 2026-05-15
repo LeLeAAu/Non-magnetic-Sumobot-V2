@@ -1,34 +1,41 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// Thư viện hỗ trợ
 #include <Arduino.h>
 #include <Wire.h>
 #include <VL53L1X.h>           
 #include <SparkFunLSM6DS3.h>   
 #include <Adafruit_SSD1306.h>    
 
-// 1. PIN MAPPING 
+// Chân kết nối ESP32
+// Giao tiếp I2C cho ToF và IMU
 #define I2C_SDA 26
 #define I2C_SCL 25
+// Giao tiếp I2C riêng cho OLED nhằm tránh nhiễu bus cảm biến
 #define OLED_SDA 23
 #define OLED_SCL 5
 
-
+// Chân điều khiển XSHUT để khởi tạo địa chỉ động cho 5 cảm biến ToF
 const int XSHUT_PINS[5] = {27, 14, 13, 16, 17}; // Giữa, Trái, Phải, Sườn Trái, Sườn Phải
 
-#define PIN_TCRT_DETECT 39
-#define PIN_TCRT_BL 34
-#define PIN_TCRT_BR 35
-#define PIN_TCRT_FL 32
-#define PIN_TCRT_FR 33
+// Chân cảm biến dò line
+#define PIN_TCRT_DETECT 39 // Phát hiện đối thủ
+#define PIN_TCRT_BL 34 // Back-left
+#define PIN_TCRT_BR 35 // Back-right
+#define PIN_TCRT_FL 32 // Front-left
+#define PIN_TCRT_FR 33 // Front-right
 
+// Chân điều khiển Motor driver
 #define PIN_MOTOR_L_RPWM 22
 #define PIN_MOTOR_L_LPWM 21
 #define PIN_MOTOR_R_RPWM 19
 #define PIN_MOTOR_R_LPWM 18
 
+// Chân cảm biến TTP223
 #define PIN_TTP223 4
 
+// Cấu hình màn hình 0.96LED 128x32
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 32
 #define OLED_RESET -1
@@ -37,9 +44,9 @@ const int XSHUT_PINS[5] = {27, 14, 13, 16, 17}; // Giữa, Trái, Phải, Sườ
 extern TwoWire I2COLED; 
 extern Adafruit_SSD1306 display;
 
-// 2. CONSTANTS & THRESHOLDS
+// Constants và Thresholds
 // --- Khoảng cách (mm) ---
-const uint16_t CONF_ENY = 1000;       // min distance xác nhận có đối thủ (tạm gán 600mm)
+const uint16_t CONF_ENY = 1000;      // min distance xác nhận có đối thủ (tạm gán 1000mm)
 const uint16_t WARN_DIST = 350;      // ngưỡng cảnh báo đối thủ ở cự ly nguy hiểm
 const uint16_t STRIKE_DIST = 250;    // khoảng cách bung lực tấn công (dành riêng cho d0)
 
@@ -78,32 +85,35 @@ const float V_EMA_ALPHA = 0.25;         // Hệ số lọc EMA cho vận tốc t
 const float V_DEADBAND_MM = 5.0;        // Deadband loại bỏ nhiễu rung li ti
 
 // --- Motor PWM (0-255) ---
-const int PWM_MAX = 255;
-const int PWM_STRIKE_HOLD = 220;
-const int PWM_HIGH = 200;
+const int PWM_MAX = 255; // Toàn lực
+const int PWM_STRIKE_HOLD = 220; // Duy trì áp lực đẩy
+const int PWM_HIGH = 200; // Tốc độ cao
 const int PWM_JIGGLE = 177; // Lực đánh võng
-const int PWM_MED = 150;
-const int PWM_LOW = 100;
-const int PWM_TURN_MIN = 80; // Thắng sức ỳ Worm Gear
-const int PWM_PIVOT = 50; 
+const int PWM_MED = 150; // Tốc độ trung bình
+const int PWM_LOW = 100; // Tốc độ thấp
+const int PWM_TURN_MIN = 80; // Lực tối thiểu để thắng ma sát tĩnh của hộp số Wormgear, chưa test thực tế, tạm để 80
+const int PWM_PIVOT = 50;c// Lực xoay tại chỗ chậm 
 
 // --- Góc & Cự ly Kinematics ---
-const float ANGLE_TIGHT = 5.0;   // Góc chính diện tuyệt đối
-const float ANGLE_WIDE = 15.0;   // Góc cho phép tạt/ủi
+const float ANGLE_TIGHT = 5.0;   // Sai số góc cho phép coi là chính diện
+const float ANGLE_WIDE = 15.0;   // Góc lệch cho phép tạt/ủi
 const float ANGLE_LOST = 20.0;   // Góc lệch coi như hụt đòn
 const float ANGLE_FLANK = 25.0;  // Góc kích hoạt Flank
-const float ANGLE_REAR = -120.0;
+const float ANGLE_REAR = -120.0; // Góc nhận diện địch phía sau
 const float ANGLE_BIN_RES = 5.0; // Độ phân giải Histogram
-const float KP_STEERING = 4.0; 
+const float KP_STEERING = 4.0;  // Hệ số tỉ lệ điều hướng
 const float ANGLE_SLOPPY = 30.0; // Góc lệch tối đa (vẫn cho phép ủi) khi đã rúc sát gầm địch
 const uint8_t FEINT_CHANCE = 25; // Tỷ lệ % tung đòn giả (Feint)
 
-const uint16_t DIST_BLIND = 2000; // Ngưỡng mù ToF
+const uint16_t DIST_BLIND = 2000; // Khoảng cách coi như mù
 const uint16_t DIST_CLOSE = 150;  // Vùng tử thần áp sát gầm
 
-const uint8_t MEDIAN_WINDOW = 3;
+const uint8_t MEDIAN_WINDOW = 3; // Lọc Median cho cảm biến khoảng cách
 
-// 3. DATA STRUCTURES & FSM ENUMS
+// Data Structures và FSM Enums
+// Cấu trúc dữ liệu và trạng thái
+
+// Định nghĩa các trạng thái FSM
 enum RobotState {
     STATE_IDLE, STATE_INIT_DELAY,
     STATE_ATK_STRIKE, STATE_ATK_FLANK_FRONT, STATE_ATK_FLANK_SIDE, 
@@ -114,35 +124,36 @@ enum RobotState {
     STATE_REC_RECOVER, STATE_SEARCH_ENEMY
 };
 
+// Cấu trúc dữ liệu hệ thống
 struct SystemData {
-    // 1. Raw Data
-    uint16_t dist[5] = {8190, 8190, 8190, 8190, 8190}; 
-    uint16_t line[4] = {0, 0, 0, 0};
+    // Raw Data
+    uint16_t dist[5] = {8190, 8190, 8190, 8190, 8190}; // Khoảng cách từ 5 ToF
+    uint16_t line[4] = {0, 0, 0, 0}; // Giá trị từ 4 cảm biến Line
     
-    // 2. IMU & Kinematics Variables
+    // IMU & Kinematics Variables
     float pitch = 0.0, roll = 0.0, yaw = 0.0;
     float accelX = 0.0, accelY = 0.0, accelZ = 0.0;
-    float enemy_angle = 0.0;        
-    float v_0 = 0.0;                
-    float v_e = 0.0;                
-    float t_robot = 0.0, t_enemy = 9999.0;   
-    int current_PWM = 0;
+    float enemy_angle = 0.0; // Góc của đối thủ so với trực chính của bot       
+    float v_0 = 0.0; // Vận tốc của bot
+    float v_e = 0.0; // Vận tốc tiếp cận của bot đối thủ
+    float t_robot = 0.0, t_enemy = 9999.0; // Thời gian dự kiến để chạm mục tiêu
+    int current_PWM = 0; // Giá trị PWM hiện tại đang xuất ra motor
     
-    // 3. Boolean Flags (Chỉ chứa data do Sensor Core 0 tạo ra)
-    bool closingFast = false;
-    bool flkPossible = false;
-    bool fallOut = false;
-    bool liftDetected = false;
-    bool impactDetected = false;
-    bool sideDanger = false;
-    bool edgeDetect = false;
-    bool isTargetLost = true; // Ban đầu auto mất mục tiêu
-    bool liftedFront = false;  
-    bool liftedRear = false;   
-    bool beingLifted = false;
+    // Boolean Flags (Chỉ chứa data do Sensor Core 0 tạo ra)
+    bool closingFast = false; // Đối thủ đang lao tới nhanh
+    bool flkPossible = false; // Điều kiện tạt sườn
+    bool fallOut = false; // Có dấu hiệu bị lật, rơi
+    bool liftDetected = false; // Đã nâng được địch
+    bool impactDetected = false; // Phát hiện có va chạm mạnh
+    bool sideDanger = false; // Nguy hiểm từ phía sườn
+    bool edgeDetect = false; // Phát hiện vạch trắng mép sân
+    bool isTargetLost = true; // Đã mất dấu đối thủ
+    bool liftedFront = false; // Bị nâng mũi
+    bool liftedRear = false; // Bị nâng đuôi
+    bool beingLifted = false; // Đang bị đối thủ nâng
 };
 
-// --- GLOBAL VARIABLES (Khai báo để các file khác biết nó tồn tại) ---
+// Khai báo biến toàn cục (extern)
 const char* getStateName(RobotState state);
 extern SystemData sysData;
 extern SemaphoreHandle_t dataMutex;
