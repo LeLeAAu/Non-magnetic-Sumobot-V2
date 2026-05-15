@@ -15,15 +15,18 @@ II. Hệ thống Cảm biến khoảng cách (Tầm nhìn của đối thủ)
 
     1. Nhóm Cảm Biến Siêu Âm - Ultrasonic
         Các mã phổ biến: 
-			HC-SR04, 
-			SRF05, 
-			FRS04, 
-			HC-SR05, 
-			JSN-SR04T, 
-			RCWL1601,
-			AJ-SR04M...
+			HC-SR04 (common), 
+			SRF05 (common), 
+			FRS04 (uncommon), 
+			HC-SR05 (mythic), 
+			JSN-SR04T (mythic), 
+			RCWL1601 (epic),
+			AJ-SR04M (mythic),
+			US-015 (mythic),
+			US-016 (mythic),
+			MaxBotix (MB1010, MB1200) (Legendary)...
         Độ hiếm: 
-			Common (Tràn lan, gặp ở 80% bot sinh viên)
+			Common -> Legendary (Tràn lan, gặp ở 80% bot sinh viên)
         Đặc điểm:
             Giá cực rẻ, nhắm mắt cũng mua được.
             Góc quét hình nón khá rộng, dễ dò trúng đối thủ to xác.
@@ -78,6 +81,36 @@ II. Hệ thống Cảm biến khoảng cách (Tầm nhìn của đối thủ)
             Kích thước khổng lồ và cực kỳ nặng -> Tạ team theo nghĩa đen, phá hỏng trọng tâm (Center of Gravity) của bot, khiến bot dễ bị bốc đầu hoặc mất cân bằng khi rẽ.
             Ăn dòng lớn, tiêu hao năng lượng cao gây áp lực lên pin.
             Overkill với một sân chơi tốc độ cao cần sự linh hoạt.
+			
+	5. Nhóm cảm biến LiDAR
+		Các mã phổ biến:
+			TF-Luna
+			TF-Mini Plus
+			TF02-Pro
+			RPLidar A1/A2
+			LD19
+			YDLidar X4
+		Độ hiếm: Legendary (Rất đắt, không ai dùng đâu)
+		Đặc điểm:
+			Khoảng cách đo cực xa
+			Tần số quét cực cao, có thể vẽ được bản đồ 2D của đối thủ trong thời gian thực
+		Điểm yếu chí mạng & Khai thác chiến thuật
+			Đọc LiDAR 360 cần vi điều khiển mạnh
+			Tia LiDAR dễ bị phản xạ hỗn loạn với bề mặt bóng loáng như gương hoặc inox
+			
+	6. Nhóm Cảm biến thị giác máy tính - AI Vision sensor
+		Các mã phổ biến:
+			HuskyLens
+			Pixy2 CMUcam5
+			OpenMV Camp
+		Độ hiếm: Legendary (Không ai dùng đâu thề)
+		Đặc điểm:
+			Không chỉ biết đổi thủ ở đâu, mà còn biết đó là đầu hay đuôi dựa trên màu sắc, hình dáng
+			Chống nhiễu cực tốt với các vật cản không phải là mục tiêu đã học
+		Điểm yếu chí mạng và khai thác:
+			Thay đổi ánh sáng đột ngột
+			Khó train
+			
 
 III. Bố trí cảm biến phát hiện đối thủ (Sensor Layout & Blind Spots)
 	* Cốt lõi: luôn ưu tiên sử dụng số lượng cảm biến lẻ (3, 5, 7,...). 
@@ -247,7 +280,10 @@ V. Vi điều khiển (Bộ não / MCU của đối thủ)
         Các mã phổ biến: 
 			Arduino Uno R3 (Common)
 			Arduino Uno R4 Minima (Rare)
+			Arduino Uni R4 WiFi (Rare)
 			Arduino Nano (Uncommon)
+			Arduino Mega 2560 (Uncommon)
+			Arduino Leonardo / Micro / Pro Micro (Uncommon)
 			Arduino Pro Mini (Rare)
 			SAMD21 M0 / M0 Mini	(Epic)
 
@@ -261,9 +297,11 @@ V. Vi điều khiển (Bộ não / MCU của đối thủ)
     2. Nhóm ESP
         Các mã phổ biến: 
 			ESP32-WROOM-32 (Uncommon)
-			ESP32-S3 (Uncommon)
+			ESP32-S3 (Rare)
 			ESP32-WROOM-38P (Uncommon)
 			ESP32 CH340 30P	(Uncommon)
+			ESP32-C3 (Uncommon)
+			ESP8266 (Uncommon)
         Đặc điểm:
             Xung nhịp cực khủng (lên tới 240MHz), kiến trúc đa nhân (Multi-core).
             Hoàn toàn dư sức chạy các cỗ máy trạng thái (FSM - Finite State Machine) phức tạp hoặc thuật toán PID bám đuổi mượt mà.
@@ -283,7 +321,7 @@ V. Vi điều khiển (Bộ não / MCU của đối thủ)
 			Hầu như rất ít sinh viên khai thác được dù chỉ 30% sức mạnh của con chip này.
 			Nếu gặp, khả năng cao là đối thủ đang dùng nó như một con Arduino Nano đắt tiền.
 
-    4. Nhóm MCU Kiến Trúc ARM / Chuyên Dụng 
+    4. Nhóm MCU Kiến Trúc ARM
         Các mã phổ biến: 
 		STM32G431CBU6 (Legendary)
 		STM32F103C8T6 (Epic)
@@ -296,7 +334,7 @@ V. Vi điều khiển (Bộ não / MCU của đối thủ)
 			Ai dám vác một board STM32 vào sàn đấu thì chắc chắn họ hiểu rất rõ về thanh ghi, kiến trúc phần cứng và làm chủ hoàn toàn được FSM của mình. 
 			Đây là đối thủ "cứng cựa" thực sự về mặt logic.
 
-    5. Nhóm Quái Vật Tính Toán
+    5. Nhóm Teensy
         Các mã phổ biến: 
 			Teensy 4.0 (God-tier)
 			Teensy 4.1 (God-tier)
@@ -419,6 +457,16 @@ VII. Phân loại chiến thuật thi đấu
             Đọc được thời điểm đối thủ nhồi max ga (PWM 255) không thể phanh lại -> Đột ngột giật lùi tốc độ cao hoặc lách ngang quỹ đạo (side-step).
             Hậu quả: Địch húc thẳng vào khoảng không, mang theo toàn bộ động năng quán tính bay tọt ra ngoài sàn đấu mà The Baiter không cần tốn một giọt mồ hôi.
 				
+	8. Kẻ tàng hình - The Ghost
+		Độ hiếm:
+			Exotic
+		Đặc điểm & trang bị:
+			Vỏ bot làm từ vật liệu hấp thụ sóng âm và / hoặc sơn đen nhám hoàn toàn
+			Thiết kế hình khối đa diện (giống máy bay tàng hình F-117) để hất lệch hướng sóng siêu âm/laser
+		Chiến thuật:
+			Lợi dụng việc cảm biến đổi thủ trả về giá trị _không thấy gì_ mà tấn công
+			
+	// Khá nhiều đối thủ chọn kết hợp các chiến thuật lại với nhau.
 VIII. Động Cơ (Cơ Bắp / Lực Đẩy của đối thủ)
 
     1. Dòng Medium Torque (Tiêu chuẩn hạng trung)
@@ -477,6 +525,7 @@ VIII. Động Cơ (Cơ Bắp / Lực Đẩy của đối thủ)
 			Lực Torque định mức lên tới 11.1 kg.cm khiến nó đẩy mọi đối thủ văng ra khỏi sàn một cách phũ phàng.
         Điểm yếu chí mạng & Khai thác:
             Torque cao nhưng tốc độ tối đa quá thấp. 
+			Bạn sẽ phải xây dựng hệ thống truyền lực bánh răng
 
     5. Dòng High-End (Đẳng cấp thần thánh / Out trình)
         Mã phổ biến: 
@@ -488,6 +537,15 @@ VIII. Động Cơ (Cơ Bắp / Lực Đẩy của đối thủ)
             MAXON là motor dùng trong hàng không vũ trụ và robot công nghiệp hạng nặng. Giá một củ MAXON RE35 có thể bằng tiền cả cái laptop. Nếu ai đó vác nó vào sân, họ là tài phiệt hoặc cầm nhầm đồ án của giáo sư đi thi.
             PG36-550: Dòng motor 550 kéo dòng xả khổng lồ (Stall có thể lên vài chục Ampe). Nếu địch xài con này mà mạch nguồn không bọc tản nhiệt nhôm cỡ đại, xe của chúng sẽ bốc khói trước khi kịp chạm vào bạn.
 	
+	6. Dòng High-Power DC Motor
+		Mã phổ biến:
+			RS-775 (12-24V)
+		Độ hiếm: 
+			Epic
+		Ý nghĩa chiến thuật:
+			Sức mạnh huỷ diệt
+		Điểm yếu:
+			Bạn sẽ phải xây dựng hệ thống truyền lực bánh răng
 	
 IX. Driver motor phổ biến
 	1. Nhóm Cổ Điển

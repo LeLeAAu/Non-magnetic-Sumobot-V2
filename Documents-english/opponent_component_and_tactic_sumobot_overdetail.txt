@@ -15,15 +15,18 @@ II. Distance Sensor Systems (Opponent “Vision”)
 
     1. Ultrasonic Sensor Group
         Common models:
-            HC-SR04,
-            SRF05,
-            FRS04,
-            HC-SR05,
-            JSN-SR04T,
-			RCWL1601,
-            AJ-SR04M...
+            HC-SR04 (common), 
+			SRF05 (common), 
+			FRS04 (uncommon), 
+			HC-SR05 (mythic), 
+			JSN-SR04T (mythic), 
+			RCWL1601 (epic),
+			AJ-SR04M (mythic),
+			US-015 (mythic),
+			US-016 (mythic),
+			MaxBotix (MB1010, MB1200) (Legendary)...
         Rarity:
-            Common (very widespread, seen in about 80% of student robots)
+            Common -> Legendary (very widespread, seen in about 80% of student robots)
 
         Characteristics:
             Extremely cheap and easy to obtain.
@@ -88,6 +91,37 @@ II. Distance Sensor Systems (Opponent “Vision”)
             Very large and heavy → Literally weighs the team down, disrupts the robot’s center of gravity, making it easier to tip or lose balance when turning.
             High current consumption, increasing battery load.
             Overkill for a high-speed competition environment that requires agility.
+			
+	5. LiDAR Sensor Series
+        Common Models:
+            TF-Luna
+            TF-Mini Plus
+            TF02-Pro
+            RPLidar A1/A2
+            LD19
+            YDLidar X4
+        Rarity:
+            Legendary (Extremely expensive — almost nobody uses them)
+        Characteristics:
+            Extremely long measurement range
+            Ultra-high scanning frequency, capable of generating a real-time 2D map of the opponent
+        Critical Weaknesses & Tactical Exploitation:
+            Processing 360° LiDAR data requires a powerful microcontroller
+            LiDAR beams can become chaotic when reflected by glossy surfaces such as mirrors or stainless steel
+
+    6. Computer Vision Sensor Series — AI Vision Sensors
+        Common Models:
+            HuskyLens
+            Pixy2 CMUcam5
+            OpenMV Cam
+        Rarity:
+            Legendary (Seriously, almost nobody uses them)
+        Characteristics:
+            Not only detects where the opponent is, but can also distinguish the front from the rear based on color and shape
+            Extremely resistant to interference from non-target objects
+        Critical Weaknesses & Exploitation:
+            Sudden lighting changes
+            Difficult to train
 			
 III. Opponent Detection Sensor Layout (Sensor Layout & Blind Spots)
 
@@ -261,7 +295,10 @@ V. Microcontrollers (Opponent “Brain” / MCU)
         Common models:
             Arduino Uno R3 (Common)
             Arduino Uno R4 Minima (Rare)
+			Arduino Uni R4 WiFi (Rare)			
             Arduino Nano (Uncommon)
+			Arduino Mega 2560 (Uncommon)
+			Arduino Leonardo / Micro / Pro Micro (Uncommon)
             Arduino Pro Mini (Rare)
             SAMD21 M0 / M0 Mini (Epic)
 
@@ -277,10 +314,12 @@ V. Microcontrollers (Opponent “Brain” / MCU)
     2. ESP Group
         Common models:
             ESP32-WROOM-32 (Uncommon)
-            ESP32-S3 (Uncommon)
+            ESP32-S3 (Rare)
             ESP32-WROOM-38P (Uncommon)
             ESP32 CH340 30P (Uncommon)
-
+			ESP32-C3 (Uncommon)
+			ESP8266 (Uncommon) 
+			
         Characteristics:
             Very high clock speeds (up to 240MHz), multi-core architecture.
             Easily capable of running complex FSM logic or smooth PID tracking algorithms.
@@ -461,6 +500,17 @@ VII. Combat Strategy Classification
             Detects the moment the opponent commits to maximum acceleration (PWM saturation) → sudden high-speed retreat or lateral sidestep.
             Result: The opponent crashes into empty space and carries its own inertia out of the arena while the Baiter remains safe.
 			
+	8. The Ghost — The Stealth Predator
+        Rarity:
+            Exotic
+        Features & Equipment:
+            Bot chassis made from sound-absorbing materials and/or coated entirely in matte black paint
+            Faceted polygonal design (similar to the F-117 stealth aircraft) to deflect ultrasonic/laser waves away from the opponent's sensors
+        Tactics:
+            Exploits the opponent’s sensors returning a “nothing detected” state to launch attacks
+
+    // Many opponents choose to combine multiple strategies together.
+			
 VIII. Motors (Muscles / Propulsion force of the opponent)
 
     1. Medium Torque Class (Standard mid-tier)
@@ -529,6 +579,7 @@ VIII. Motors (Muscles / Propulsion force of the opponent)
 
         Critical weakness:
             High torque but relatively low maximum speed.
+			You will have to build a gear-driven power transmission system.
 
     5. High-end class (Overkill tier)
         Common models:
@@ -542,6 +593,16 @@ VIII. Motors (Muscles / Propulsion force of the opponent)
             PG36-550:
                 A size-550 class motor capable of extremely high current draw (stall current may reach tens of amps).
                 If used without proper thermal design, the opponent’s system may fail before making contact.
+				
+	6. High-Power DC Motor Series
+        Common Model:
+            RS-775 (12–24V)
+        Rarity:
+            Epic
+        Tactical Significance:
+            Devastating power
+        Weakness:
+            You will have to build a gear-driven power transmission system.
 
 IX. Common motor drivers
 
