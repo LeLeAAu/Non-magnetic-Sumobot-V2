@@ -58,9 +58,9 @@ void TaskSensorCode(void * pvParameters) {
                     last_valid_dist[i] = tempData.dist[i];
                 } else {
                     int delta_dist = (int)raw_dist - (int)last_valid_dist[i];
-                    if (delta_dist > 400 && last_valid_dist[i] < 1500) { 
+                    if (delta_dist > 200 && last_valid_dist[i] < 1500) { 
                         spike_count[i]++;
-                        if (spike_count[i] <= 2) raw_dist = last_valid_dist[i];
+                        if (spike_count[i] <= 1) raw_dist = last_valid_dist[i];
                         else last_valid_dist[i] = raw_dist;
                     } else {
                         spike_count[i] = 0;
@@ -112,7 +112,7 @@ void TaskSensorCode(void * pvParameters) {
             // 3. TÍNH VẬN TỐC THEO CHU KỲ CỐ ĐỊNH (Khử nhiễu bất đồng bộ)
             float dt_kinematic = (current_time - last_kinematic_time) / 1000.0;
 
-            if (dt_kinematic >= 0.035) { 
+            if (dt_kinematic >= 0.040) { 
                 static float prev_d = 8190.0;
                 
                 if (!tempData.isTargetLost && prev_d < 8190.0) {

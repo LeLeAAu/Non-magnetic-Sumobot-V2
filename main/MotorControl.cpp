@@ -15,7 +15,7 @@ void setMotors(int leftSpeed, int rightSpeed) {
     static bool left_in_deadtime = false;
     static bool right_in_deadtime = false;
 
-    const uint32_t DEADTIME_MS = 30; // 30ms delay theo yêu cầu
+    const uint32_t DEADTIME_MS = 12; // 30ms delay theo yêu cầu
     uint32_t current_time = millis();
 
     // 1. Lấy dấu của lệnh yêu cầu hiện tại
@@ -93,11 +93,11 @@ void driveBot(int leftSpeed, int rightSpeed) {
 
     // --- BỘ LỌC BÙ MA SÁT TĨNH (STATIC FRICTION COMPENSATOR) ---
     // Thời gian "chích" xung PWM cao để thắng sức ỳ ban đầu
-    const uint32_t KICKSTART_MS = 30;
+    const uint32_t KICKSTART_MS = 15;
     // Ngưỡng PWM để xem xét kích hoạt (nếu tốc độ yêu cầu nằm trong khoảng lờ đờ)
     const int SLOW_TURN_THRESHOLD = 120; 
     // Xung lực mồi (thường để 150-200, mình set mặc định 180 cho mượt)
-    const int KICK_PWM = 180;
+    const int KICK_PWM = 220;
 
     uint32_t elapsed_in_state = millis() - state_start_time;
 

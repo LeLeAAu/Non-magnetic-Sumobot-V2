@@ -1,3 +1,9 @@
+// Việc dùng ToF tạo khoảng delay đo khoảng cách khá lớn. Nếu sau này có một cuộc thi khác thì sẽ chuyển dùng cảm biến ánh sáng khác
+
+// Todo list (dùng cho tất cả các file kể cả file main.ino này)
+/*
+*/
+
 #include "Config.h"
 #include "MotorControl.h"
 #include "DisplayFace.h"
@@ -87,7 +93,7 @@ void setup() {
             // 33ms là Timing Budget tối thiểu cho mode Long để đảm bảo ổn định
             sensorsToF[i].setMeasurementTimingBudget(33000); 
             // Thời gian chờ giữa 2 lần lấy mẫu = Budget + 5ms margin
-            sensorsToF[i].startContinuous(38);
+            sensorsToF[i].startContinuous(34);
         }
     }
     if (hardwareError) {
