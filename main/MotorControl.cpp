@@ -43,7 +43,7 @@ void setMotors(int leftSpeed, int rightSpeed) {
         }
     }
 
-    // --- XỬ LÝ MOTOR PHẢI ---
+    // XỬ LÝ MOTOR PHẢI
     if (right_in_deadtime) {
         if (current_time - right_deadtime_start >= DEADTIME_MS) {
             right_in_deadtime = false;
@@ -61,7 +61,7 @@ void setMotors(int leftSpeed, int rightSpeed) {
         }
     }
 
-    // --- XẢ TÍN HIỆU RA CHÂN VẬT LÝ ---
+    // XẢ TÍN HIỆU RA CHÂN VẬT LÝ
     // Lúc này leftSpeed và rightSpeed đã được bộ lọc phía trên xử lý an toàn
     
     // Xả tín hiệu ra Motor Trái
@@ -91,8 +91,8 @@ void setMotors(int leftSpeed, int rightSpeed) {
 
 void driveBot(int leftSpeed, int rightSpeed) {
 
-    // --- BỘ LỌC BÙ MA SÁT TĨNH (STATIC FRICTION COMPENSATOR) ---
-    // Thời gian "chích" xung PWM cao để thắng sức ỳ ban đầu
+    // STATIC FRICTION COMPENSATOR
+    // Thời gian chích xung PWM cao để thắng sức ỳ ban đầu
     const uint32_t KICKSTART_MS = 15;
     // Ngưỡng PWM để xem xét kích hoạt (nếu tốc độ yêu cầu nằm trong khoảng lờ đờ)
     const int SLOW_TURN_THRESHOLD = 120; 
@@ -104,14 +104,14 @@ void driveBot(int leftSpeed, int rightSpeed) {
     // Chỉ can thiệp nếu FSM đang ở trong giai đoạn 30ms đầu tiên của 1 State mới
     if (elapsed_in_state < KICKSTART_MS) {
         
-        // --- XỬ LÝ MOTOR TRÁI ---
+        // XỬ LÝ MOTOR TRÁI
         // Nếu lệnh yêu cầu đang bắt chạy chậm, nhưng lại không phải là lệnh phanh cứng (0)
         if (abs(leftSpeed) > 0 && abs(leftSpeed) < SLOW_TURN_THRESHOLD) {
             // Giữ nguyên chiều (dấu), chỉ bơm áp lên KICK_PWM
             leftSpeed = (leftSpeed > 0) ? KICK_PWM : -KICK_PWM;
         }
 
-        // --- XỬ LÝ MOTOR PHẢI ---
+        // XỬ LÝ MOTOR PHẢI
         if (abs(rightSpeed) > 0 && abs(rightSpeed) < SLOW_TURN_THRESHOLD) {
             rightSpeed = (rightSpeed > 0) ? KICK_PWM : -KICK_PWM;
         }

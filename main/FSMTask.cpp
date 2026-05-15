@@ -1,20 +1,23 @@
+// Xử lí dữ liệu từ Core 0 để đưa ra quyết định
+
 #include "FSMTask.h"
 #include "Config.h"
 #include "MotorControl.h"
 #include <Arduino.h>   
 #include <math.h>       
 
+// Hàm phụ trợ nhằm tính toán góc xuất hiện nhiều nhất của đối thủ để dự đoán vị trí
 float getModeAngle(float* history, int size);
 
 void TaskFSMCode(void * pvParameters) {
-    // Các biến tĩnh dùng riêng cho FSM
+   // Khởi tạo bộ nhớ chiễn thuật ĩnh
     
     // Biến cho việc build Histogram trong lúc chờ
     const int HIST_SIZE = 50;
     static float angle_histogram[HIST_SIZE];
 
     for (int i = 0; i < HIST_SIZE; i++) {
-        angle_histogram[i] = 999.0;
+        angle_histogram[i] = 999.0; // 999.0 là giá trị rỗng
     }
     static int hist_idx = 0;
     static uint8_t stalemate_cycles = 0; // Đếm số lần bế tắc
@@ -22,41 +25,40 @@ void TaskFSMCode(void * pvParameters) {
     for(;;) {
         uint32_t fsm_current_time = millis();
 
-        // HỤP ẢNH DỮ LIỆU CẢM BIẾN 
+        // Data spapshot
         SystemData localData; // Bản sao cục bộ chỉ sống trong vòng lặp này
-        
         xSemaphoreTake(dataMutex, portMAX_DELAY); // Khóa Mutex an toàn
         localData = sysData;          
         xSemaphoreGive(dataMutex); // Mở khóa
-        // TỪ ĐÂY TRỞ XUỐNG, CHỈ SỬ DỤNG localData. TUYỆT ĐỐI KHÔNG GỌI sysData NỮA!
+        // TỪ ĐÂY TRỞ XUỐNG, CHỈ SỬ DỤNG localData. TUYỆT ĐỐI KHÔNG GỌI sysData
 
-        // [GLOBAL SAFETY LAYER]
+        // Global Safety layer
         bool is_self_jerk_blind_time = (fsm_current_time - state_start_time < 250);
 
         if (currentState != STATE_IDLE && currentState != STATE_INIT_DELAY) {
 
-            // PRIORITY 1: LẬT XE / RỚT ĐÀI
+            // ƯU TIÊN 1: Lật xe/rớt đài
             if (localData.fallOut) {
                 if (currentState != STATE_DEF_LAST_STAND) {
                     enterState(STATE_DEF_LAST_STAND);
                     Serial.println(">>> GLOBAL SAFETY: FALL OUT -> LAST STAND!");
                 }
             }
-            // PRIORITY 2: BỊ NHẤC BỔNG / XÚC GẦM
+            // ƯU TIÊN 2: Bị xới gầm / nhấc bổng
             else if (localData.liftedFront || localData.liftedRear || localData.beingLifted) {
                 if (currentState != STATE_DEF_ANTI_LIFT) {
                     enterState(STATE_DEF_ANTI_LIFT);
                     Serial.println(">>> GLOBAL SAFETY: BEING LIFTED -> ANTI_LIFT!");
                 }
             }
-            // PRIORITY 3: MÉP SÂN
+            // ƯU TIÊN 3: Gặp Edge
             else if (localData.edgeDetect) {
                 if (currentState != STATE_DEF_EDGE_AVOID && currentState != STATE_DEF_LAST_STAND) {
                     enterState(STATE_DEF_EDGE_AVOID);
                     Serial.println(">>> GLOBAL SAFETY: EDGE DETECTED -> AVOID!");
                 }
             }
-            // PRIORITY 4: BỊ ĐÂM CHÍ MẠNG (Phản công)
+            // ƯU TIÊN 4: Bị đâm mạnh
             else if (localData.impactDetected && !is_self_jerk_blind_time && 
                      currentState != STATE_ATK_STRIKE && 
                      currentState != STATE_ATK_LIFT &&
@@ -64,47 +66,48 @@ void TaskFSMCode(void * pvParameters) {
                      currentState != STATE_DEF_REAR_GUARD &&
                      currentState != STATE_DEF_SIDE_GUARD) {
                 
+                // Phân tích hướng bị đâm dựa trên việc ToF có đang bị mù hay không
                 bool blind_hit = (localData.dist[0] > WARN_DIST && localData.dist[1] > WARN_DIST && 
                                   localData.dist[2] > WARN_DIST && localData.dist[3] > WARN_DIST && localData.dist[4] > WARN_DIST);
                 bool side_hit = (localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST);
 
                 if (blind_hit) {
-                    enterState(STATE_DEF_REAR_GUARD);
+                    enterState(STATE_DEF_REAR_GUARD); // Đâm từ điểm mù -> Thủ sau
                     Serial.println(">>> GLOBAL SAFETY: BLIND IMPACT -> REAR GUARD!");
                 } else if (side_hit && currentState == STATE_SEARCH_ENEMY) {
-                    enterState(STATE_DEF_SIDE_GUARD);
+                    enterState(STATE_DEF_SIDE_GUARD); // Đâm ngang hông -> Thủ sườn
                     Serial.println(">>> GLOBAL SAFETY: SIDE IMPACT -> SIDE GUARD!");
                 } else {
-                    enterState(STATE_DEF_ANTI_PUSH);
+                    enterState(STATE_DEF_ANTI_PUSH); // Mặc định: giằng co chính diện
                     Serial.println(">>> GLOBAL SAFETY: FRONT IMPACT -> ANTI_PUSH!");
                 }
             }
         }
 
-        // [NORMAL FSM SWITCH-CASE]
+        // NORMAL FSM SWITCH-CASE
         switch (currentState) {
             
             // NHÓM 1: KHỞI TẠO (INIT)
             case STATE_IDLE:
             {
-                driveBot(0, 0);
-                
+                driveBot(0, 0); // Khoá động cơ
+                // Ghi nhớ vị trí địch liên tục vào histogram
                 if (!localData.isTargetLost) {
                     angle_histogram[hist_idx] = localData.enemy_angle;
                     hist_idx = (hist_idx + 1) % HIST_SIZE;
                 }
 
-                if (digitalRead(PIN_TTP223) == HIGH) {
-                    enterState(STATE_INIT_DELAY);
+                if (digitalRead(PIN_TTP223) == HIGH) { // Chạm nút
+                    enterState(STATE_INIT_DELAY); // Bắt đầu đếm ngược
                     Serial.println(">>> START: INIT_DELAY (3 seconds)");
                 } 
                 break;
             }
 
-            case STATE_INIT_DELAY: // Gộp chung logic đọc Histogram cho gọn
+            case STATE_INIT_DELAY: 
             {
-                driveBot(0, 0);
-                
+                driveBot(0, 0); // Khoá động cơ
+                // Tiếp tục ghi nhớ góc địch trong lúc đếm ngược 3s
                 if (!localData.isTargetLost) {
                     angle_histogram[hist_idx] = localData.enemy_angle;
                     hist_idx = (hist_idx + 1) % HIST_SIZE;
@@ -114,7 +117,7 @@ void TaskFSMCode(void * pvParameters) {
                         localData.dist[2] > DIST_BLIND && localData.dist[3] > DIST_BLIND && 
                         localData.dist[4] > DIST_BLIND) {
                         
-                        angle_histogram[hist_idx] = 180.0; // Ném góc 180 độ vào Data
+                        angle_histogram[hist_idx] = 180.0; // Giả định địch ở góc 180
                         hist_idx = (hist_idx + 1) % HIST_SIZE;
                     }
                 }
@@ -126,15 +129,15 @@ void TaskFSMCode(void * pvParameters) {
                     }
                 } 
                 else if (currentState == STATE_INIT_DELAY) {
-                    if (fsm_current_time - state_start_time >= 3000) {
+                    if (fsm_current_time - state_start_time >= 3000) { // Hết 3s đếm ngược -> Đưa ra quyết định
                         float target_angle = getModeAngle(angle_histogram, HIST_SIZE); 
                         
-                        if (localData.dist[0] < CONF_ENY) {
-                            enterState(STATE_ATK_LOCK);
+                        if (localData.dist[0] < CONF_ENY) { // Địch trước mặt
+                            enterState(STATE_ATK_LOCK); // Lock
                             Serial.println(">>> DELAY XONG: ĐỊCH NGAY TRƯỚC MẶT -> LOCK!");
                         } else {
                             enterState(STATE_SEARCH_ENEMY);
-                            if (target_angle != 999.0) {
+                            if (target_angle != 999.0) { // Xoay robot về góc đã ghi nhớ
                                 xSemaphoreTake(dataMutex, portMAX_DELAY);
                                 sysData.enemy_angle = target_angle; 
                                 xSemaphoreGive(dataMutex);
@@ -158,7 +161,7 @@ void TaskFSMCode(void * pvParameters) {
                 // Chốt hướng né ngay khoảnh khắc đầu tiên nhảy vào State
                 if (state_just_entered) {
                     
-                    // Áp dụng lại lớp mặt nạ (Masking) y hệt Core 0
+                    // Áp dụng lại lớp mặt nạ (Masking) y hệt Core 0 cho góc nghiêng để bỏ qua cảnh báo giả
                     bool ignore_front = (localData.pitch > PITCH_TH); 
                     bool ignore_rear  = (localData.pitch < -PITCH_TH);
 
@@ -182,9 +185,9 @@ void TaskFSMCode(void * pvParameters) {
                 // Liên tục bơm PWM đã chốt
                 driveBot(esc_l, esc_r);
 
-                if (!localData.edgeDetect) {
+                if (!localData.edgeDetect) { // Điều kiện thoát:
                     if (clean_edge_time == 0) clean_edge_time = fsm_current_time;
-                    if (fsm_current_time - clean_edge_time >= EDGE_TIMEOUT) {
+                    if (fsm_current_time - clean_edge_time >= EDGE_TIMEOUT) { // Không quét thấy vạch trắng liên tục trong khoảng EDGE_TIMEOUT
                         clean_edge_time = 0;
                         if (localData.dist[0] < WARN_DIST) {
                             enterState(STATE_ATK_STRIKE);
@@ -195,12 +198,12 @@ void TaskFSMCode(void * pvParameters) {
                         }
                     }
                 } else {
-                    clean_edge_time = 0;
+                    clean_edge_time = 0; // Nếu trễ một tí lại thấy vạch trắng -> xoá bộ đếm
                 }
                 break;
             }
 
-            case STATE_DEF_LAST_STAND:
+            case STATE_DEF_LAST_STAND: // Khi xe bị lật nghiêng hoặc sắp rớt đài
             {
                 if (localData.pitch < -PITCH_TH) driveBot(-PWM_MAX, -PWM_MAX); 
                 else if (localData.pitch > PITCH_TH) driveBot(PWM_MAX, PWM_MAX);
@@ -209,6 +212,7 @@ void TaskFSMCode(void * pvParameters) {
                 else driveBot(-200, -200); 
 
                 static uint32_t stable_time = 0;
+                // Nếu lấy lại thăng bằng thành công -> Recover
                 if (fabsf(localData.pitch) <= 5.0 && fabsf(localData.roll) <= 5.0 && !localData.fallOut) {
                     if (stable_time == 0) stable_time = fsm_current_time;
                     if (fsm_current_time - stable_time >= 100) {
@@ -230,11 +234,11 @@ void TaskFSMCode(void * pvParameters) {
                 int escape_pwm = localData.liftedFront ? -PWM_MAX : PWM_MAX; 
                 int jiggle_pwm = localData.liftedFront ? -PWM_JIGGLE : PWM_JIGGLE;
 
-                // CHIẾN THUẬT: Đánh võng hướng ngược lại cái nêm của địch
+                // Đánh võng hướng ngược lại cái nêm của địch
                 if (elapsed_time < 200) {
                     driveBot(escape_pwm, escape_pwm); 
                 } 
-                else if (elapsed_time < 800) {
+                else if (elapsed_time < 800) { // Lắc lư trái phải liên tục
                     int phase = ((elapsed_time - 200) / 100) % 2; 
                     if (phase == 0) driveBot(escape_pwm, jiggle_pwm); 
                     else driveBot(jiggle_pwm, escape_pwm);            
@@ -251,14 +255,14 @@ void TaskFSMCode(void * pvParameters) {
                 
                 // ĐIỀU KIỆN THOÁT 2 (TIMEOUT)
                 else if (elapsed_time > 1200) {
-                    enterState(STATE_DEF_LAST_STAND);
+                    enterState(STATE_DEF_LAST_STAND); // Chuyển sang trạng thái rớt đài
                     Serial.println(">>> ANTI_LIFT BẾ TẮC -> LAST STAND!");
                 }
                 
                 break;
             }
 
-            case STATE_DEF_ANTI_PUSH:
+            case STATE_DEF_ANTI_PUSH: // Bị đâm mạnh từ phía trước
             {
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
 
@@ -288,8 +292,8 @@ void TaskFSMCode(void * pvParameters) {
 
                 // Bắt Entry Action 1 lần duy nhất khi mới vào State
                 if (state_just_entered) {
-                    escape_dir = (esp_random() & 1) ? 1 : -1;
-                }
+                    escape_dir = (esp_random() & 1) ? 1 : -1; // + NGẫu nhiên hướng
+                } 
 
                 if (elapsed_time < 300) driveBot(PWM_MAX * escape_dir, PWM_MAX * escape_dir);
                 else {
@@ -340,7 +344,7 @@ void TaskFSMCode(void * pvParameters) {
                 static int search_dir = 1; 
 
                 if (state_just_entered) {
-                     search_dir = (localData.enemy_angle < 0) ? -1 : 1;
+                     search_dir = (localData.enemy_angle < 0) ? -1 : 1; // Ưu tiên quay về phía vừa mất dấu
                 }
 
                 if (elapsed_time < 1000) {
@@ -411,6 +415,7 @@ void TaskFSMCode(void * pvParameters) {
             // NHÓM 3: TẤN CÔNG (ATTACK)
             case STATE_ATK_LOCK:
             {
+                // Bám mục tiêu
                 static uint8_t lock_retries = 0;
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
 
@@ -434,13 +439,12 @@ void TaskFSMCode(void * pvParameters) {
                     break;
                 }
 
-                // KẾT VÀO: Lái xe (Steering) hướng mục tiêu vào chính diện
+                // Điều hướng mục tiêu vào chính diện
                 float err_angle = localData.enemy_angle; 
-                
-                // Triệt tiêu độ giật (Discontinuity) khi góc dao động quanh ngưỡng TIGHT
                 int forward_pwm = 0;
                 int turn_pwm = 0;
 
+                // Triệt tiêu độ giật khi góc dao động quanh ngưỡng TIGHT
                 if (fabsf(err_angle) <= ANGLE_TIGHT) {
                     driveBot(PWM_HIGH, PWM_HIGH); // Thẳng tắp -> Phóng thẳng
                 } else {
@@ -450,7 +454,7 @@ void TaskFSMCode(void * pvParameters) {
                     if (fabsf(err_angle) < ANGLE_FLANK) { 
                         forward_pwm = PWM_MED; // Vẫn đang nhìn thấy khá rõ -> Vừa tiến vừa bẻ
                     } else {
-                        forward_pwm = 0; // Lệch góc quá gắt -> Xoay tại chỗ (Pivot) để bắt hình nhanh
+                        forward_pwm = 0; // Lệch góc quá gắt -> Xoay tại chỗ để bắt hình nhanh
                     }
 
                     if (err_angle > 0) {
@@ -460,7 +464,7 @@ void TaskFSMCode(void * pvParameters) {
                     }
                 }
 
-                // ĐIỀU KIỆN KÍCH HOẠT LỰC ĐÁNH (STRIKE/FLANK/RUSH)
+                // Điều kiện ra đòn
                 bool is_ready_to_strike = false;
                 if (localData.dist[0] < WARN_DIST && fabsf(err_angle) <= ANGLE_WIDE) {
                     is_ready_to_strike = true;
@@ -471,9 +475,9 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (is_ready_to_strike) {
                     if (!localData.sideDanger) {
-                        // Cây quyết định (Decision Tree)
+                        // Decision Tree
                         if (localData.closingFast) {
-                            enterState(STATE_ATK_DELAY_RUSH);
+                            enterState(STATE_ATK_DELAY_RUSH); // Địch đang lao tới nhanh
                             lock_retries = 0;
                             Serial.println(">>> LOCK SUCCESS -> ENEMY RUSHING -> DELAY RUSH!");
                         } 
@@ -481,9 +485,9 @@ void TaskFSMCode(void * pvParameters) {
                             if (localData.dist[0] > DIST_CLOSE && (esp_random() % 100 < FEINT_CHANCE)) {
                                 enterState(STATE_ATK_FEINT);
                                 lock_retries = 0;
-                                Serial.println(">>> LOCK SUCCESS -> TACTICAL FEINT!");
+                                Serial.println(">>> LOCK SUCCESS -> TACTICAL FEINT!"); // Địch ở hơi xa -> nhử mồi (25%)
                             } else {
-                                enterState(STATE_ATK_STRIKE);
+                                enterState(STATE_ATK_STRIKE); // Đâm thẳng mặt
                                 lock_retries = 0; 
                                 Serial.println(">>> LOCK SUCCESS -> DEFAULT STRIKE!");
                             }
@@ -508,14 +512,14 @@ void TaskFSMCode(void * pvParameters) {
 
             case STATE_ATK_STRIKE:
             {
+                // CHuỗi ra đòn
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
 
-                // CHUỖI RA ĐÒN: Bơm xung động lượng (Momentum)
                 if (elapsed_time < PUSH_MS) {
                     driveBot(PWM_MAX, PWM_MAX); // Xung lực tối đa (Bắn tốc)
                 } 
                 else if (elapsed_time < PUSH_MS + HOLD_PUSH_MS) {
-                    driveBot(220, 220); // Duy trì áp lực (Đẩy sáp lá cà)
+                    driveBot(220, 220); // Duy trì áp lực
                 } 
                 else {
                     driveBot(200, 200); // Theo xe, tránh trượt bánh (Wheel slip)
@@ -533,7 +537,7 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (localData.liftDetected) {
                     enterState(STATE_ATK_LIFT);
-                    Serial.println(">>> STRIKE -> ENEMY LIFTED -> ATK_LIFT (FULL POWER)!");
+                    Serial.println(">>> STRIKE -> ENEMY LIFTED -> ATK_LIFT (FULL POWER)!"); // Chui được gầm địch thì đẩy hết cỡ
                     break;
                 }
 
@@ -546,7 +550,7 @@ void TaskFSMCode(void * pvParameters) {
                     break;
                 }
 
-                // IỂM SOÁT BẾ TẮC (STALEMATE) THAY VÌ "DRIVE FOREVER"
+                // STALEMATE
                 // Nếu hai xe đang húc nhau giằng co quá lâu (vượt TIMEOUT_MAX),
                 // Việc ủi thẳng mãi sẽ làm cháy động cơ/tuột bánh răng.
                 // Giải pháp: Kích hoạt tự hãm của Worm Gear bằng cách phanh cứng 0 PWM.
@@ -557,7 +561,7 @@ void TaskFSMCode(void * pvParameters) {
 
         break;
       } 
-            case STATE_ATK_STALEMATE_BRAKE:
+            case STATE_ATK_STALEMATE_BRAKE: // Khoá cứng động cơ Worm Gear, lợi dụng cơ khí trục vít tự hãm
             {
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
 
@@ -572,12 +576,12 @@ void TaskFSMCode(void * pvParameters) {
                         stalemate_cycles++; 
                         
                         if (stalemate_cycles >= 5) {
-                            // Đã húc nhau 5 nhịp (hơn 6 giây) không kết quả -> PHÁ THẾ BẾ TẮC
+                            // Đã húc nhau 5 nhịp (hơn 6 giây) không kết quả -> phá thế
                             stalemate_cycles = 0;
                             enterState(STATE_REC_RECOVER); // Giật lùi nhanh và xoay tìm góc đánh sườn
                             Serial.println(">>> STALEMATE BROKEN -> FALLBACK TO RECOVER!");
                         } else {
-                            // Mới húc nhịp đầu, bồi thêm nhát STRIKE nữa xem sao!
+                            // Đánh tiếp
                             enterState(STATE_ATK_STRIKE);
                             Serial.println(">>> BRAKE DONE -> RE-STRIKE!");
                         }
@@ -681,7 +685,6 @@ void TaskFSMCode(void * pvParameters) {
 
             case STATE_ATK_FLANK_REAR:
             {
-                
                 bool enemy_on_left = (localData.dist[3] < CONF_ENY) || (localData.enemy_angle <= -120.0);
 
                 if (fabsf(localData.v_e) < 100.0) { 
@@ -760,8 +763,7 @@ void TaskFSMCode(void * pvParameters) {
                 // ép chặt lưỡi ủi Teflon sát rạt xuống mặt sàn, biến xe thành một cái nêm.
                 driveBot(80, 80); 
 
-                // CHỜ KHOẢNG CÁCH, KHÔNG CHỜ THỜI GIAN
-                // Ngay khi địch lọt vào "vùng tử thần" (< 150mm), dậm kịch ga để bẩy nó lên!
+                // Ngay khi địch lọt vào 150, dậm kịch ga để bẩy
                 if (localData.dist[0] <= 150) {
                     enterState(STATE_ATK_STRIKE); 
                     Serial.println(">>> COUNTER RUSH: ĐỊCH VÀO TẦM (<150mm) -> BUNG MAX GA (UPPERCUT)!");
