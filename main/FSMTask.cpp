@@ -27,9 +27,6 @@ void TaskFSMCode(void * pvParameters) {
         uint32_t fsm_current_time = millis();
 
         // Data spapshot
-        SystemData localData; // Bản sao cục bộ chỉ sống trong vòng lặp này
-        uint32_t fsm_current_time = millis();
-
         // Đọc không khoá, lấy dữ liệu từ buffer mới nhất với tốc độ cao
         SystemData localData = sysBuffer[read_index.load()]; 
 

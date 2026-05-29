@@ -6,7 +6,8 @@
 #include <Wire.h>
 #include <VL53L1X.h>           
 #include <SparkFunLSM6DS3.h>   
-#include <Adafruit_SSD1306.h>    
+#include <Adafruit_SSD1306.h>   
+#include <atomic> 
 
 // Chân kết nối ESP32
 // Giao tiếp I2C cho ToF và IMU
@@ -92,7 +93,7 @@ const int PWM_JIGGLE = 177; // Lực đánh võng
 const int PWM_MED = 150; // Tốc độ trung bình
 const int PWM_LOW = 100; // Tốc độ thấp
 const int PWM_TURN_MIN = 80; // Lực tối thiểu để thắng ma sát tĩnh của hộp số Wormgear, chưa test thực tế, tạm để 80
-const int PWM_PIVOT = 50;c// Lực xoay tại chỗ chậm 
+const int PWM_PIVOT = 50;// Lực xoay tại chỗ chậm 
 
 // --- Góc & Cự ly Kinematics ---
 const float ANGLE_TIGHT = 5.0;   // Sai số góc cho phép coi là chính diện

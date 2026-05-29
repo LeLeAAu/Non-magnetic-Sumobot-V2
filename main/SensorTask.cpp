@@ -48,8 +48,6 @@ void TaskSensorCode(void * pvParameters) {
 
     for(;;) {
         uint32_t current_time = millis();
-        SystemData tempData; // Bản sao làm việc cục bộ
-        uint32_t current_time = millis();
 
         // Xác định xem FSM đang đọc buffer nào, ta sẽ viết vào buffer còn lại
         uint8_t write_index = 1 - read_index.load(); 

@@ -10,7 +10,7 @@
 
 // Problems
 /*
-- OLED Adafruit_SSD1306 clear & redraw toàn bộ mỗi 100ms -> - Dùng partial update (display.fillRect() cho vùng thay đổi) hoặc chuyển sang u8g2 với buffer 1-bit + Giảm tần suất xuống rất chậm
+
 - Debug Serial mỗi 500ms in ~20 dòng -> - Chuyển sang chế độ conditional (#define DEBUG_LEVEL 0/1/2) hoặc dùng telemetry binary (COBS/Protobuf) giảm overhead UART
 - Chỉ halt lúc boot nếu lỗi sensor, không giám sát runtime
 - Đòn giả FEINT_CHANCE = 25 random thuần túy -> Chuyển thành trigger có điều kiện: sau 2 lần ATK_STRIKE thất bại (v_e < 50mm/s), hoặc khi isTargetLost < 200ms
@@ -176,52 +176,85 @@ void loop() {
     static int last_shown_sec = -1;
     static uint32_t last_idle_draw = 0;
 
+    //Biến Tracking để lọc nhiễu hiển thị
+    static float last_disp_angle = -999.0;
+    static int last_disp_dist = -1;
+    static bool last_disp_lost = false;
+    static bool is_full_redraw_needed = true; // Cờ yêu cầu vẽ lại bộ khung tĩnh
+
     if (currentState == STATE_IDLE) { // Giao diện chờ
-        last_shown_sec = -1; // Reset biến đếm ngược
+        last_shown_sec = -1;
         uint32_t idle_duration = current_time - state_start_time;
 
-        // Cập nhật màn hình IDLE mỗi 100ms (chống nhiễu I2C)
+        // Check 100ms một lần, chỉ đẩy dữ liệu qua I2C nếu có sự thay đổi thật sự
         if (current_time - last_idle_draw >= 100) {
-            display.clearDisplay();
-            display.setTextColor(SSD1306_WHITE);
-
-            // Lấy snapshot từ buffer
             SystemData snap = sysBuffer[read_index.load()];
-            
-            if (idle_duration < 30000) {  // Dưới 30 giây -> Thức chờ lệnh
-                display.setTextSize(2);
-                display.setCursor(0, 0);
-                display.println("READY...");
-                
-                display.setTextSize(1);
-                if (snap.isTargetLost) display.println("Target: LOST");
-                else display.printf("Target: %.1f deg\n", snap.enemy_angle);
 
-                // Thêm khoảng cách mắt giữa (D0) vào màn hình READY
-                display.printf("Dist: %d mm\n", snap.dist[0]); 
+            // Định nghĩa mức độ thay đổi để trigger redraw - Deadband hiển thị
+            // Lệch > 2 độ hoặc > 15mm thì mới cập nhật số, tránh nhiễu li ti làm nháy số
+            bool angle_changed = fabsf(snap.enemy_angle - last_disp_angle) >= 2.0; 
+            bool dist_changed = abs(snap.dist[0] - last_disp_dist) >= 15;          
+            bool status_changed = (snap.isTargetLost != last_disp_lost);
 
-            } else {  // Quá 30 giây -> Lim dim ngủ
-                // Vẽ mặt ngủ
-                display.setTextSize(4);
-                display.setCursor(28, 0);
-                display.print("u_u");
+            bool needs_update = is_full_redraw_needed || status_changed || (!snap.isTargetLost && (angle_changed || dist_changed));
 
-                // Overlay dữ liệu VLX
-                display.setTextSize(1);
-                display.setCursor(0, 0); 
-                // Chỉ hiển thị mắt giữa d[0] cho gọn
-                if(snap.dist[0] < 2000) {
-                    display.printf("D:%d", snap.dist[0]);
-                } else {
-                    display.print("D:INF");
+            if (needs_update) {
+                if (idle_duration < 30000) {  // Dưới 30 giây -> Thức chờ lệnh
+                    if (is_full_redraw_needed) {
+                        display.clearDisplay(); // Chỉ clear 1 lần duy nhất khi mới vào State
+                        display.setTextSize(2);
+                        display.setTextColor(SSD1306_WHITE);
+                        display.setCursor(0, 0);
+                        display.println("READY...");
+                        is_full_redraw_needed = false;
+                    }
+
+                    // Partial Update: Tẩy riêng khu vực chứa text thông số ở nửa dưới (Y từ 16 đến 32)
+                    display.fillRect(0, 16, 128, 16, SSD1306_BLACK);
+
+                    display.setTextSize(1);
+                    display.setCursor(0, 16); 
+                    if (snap.isTargetLost) {
+                        display.println("Target: LOST");
+                        display.printf("Dist: %d mm\n", snap.dist[0]);
+                    } else {
+                        display.printf("Target: %.1f deg\n", snap.enemy_angle);
+                        display.printf("Dist: %d mm\n", snap.dist[0]);
+                    }
+                } else {  // Quá 30 giây -> Lim dim ngủ
+                    if (is_full_redraw_needed) {
+                        display.clearDisplay();
+                        display.setTextSize(4);
+                        display.setTextColor(SSD1306_WHITE);
+                        display.setCursor(28, 0);
+                        display.print("u_u");
+                        is_full_redraw_needed = false;
+                    }
+
+                    // Partial Update: Tẩy riêng khu vực góc trái trên cùng chứa cụm "D:XXX"
+                    display.fillRect(0, 0, 40, 10, SSD1306_BLACK);
+
+                    display.setTextSize(1);
+                    display.setCursor(0, 0);
+                    if(snap.dist[0] < 2000) {
+                        display.printf("D:%d", snap.dist[0]);
+                    } else {
+                        display.print("D:INF");
+                    }
                 }
+
+                display.display(); // Chốt xả dữ liệu qua I2C
+
+                // Lưu lại trạng thái để so sánh cho chu kỳ tiếp theo
+                last_disp_angle = snap.enemy_angle;
+                last_disp_dist = snap.dist[0];
+                last_disp_lost = snap.isTargetLost;
             }
-            
-            display.display();
             last_idle_draw = current_time;
         }
     }
     else if (currentState == STATE_INIT_DELAY) {
+        is_full_redraw_needed = true;
         // Vẽ đếm ngược 3 -> 2 -> 1
         uint32_t elapsed = current_time - state_start_time;
         if (elapsed < 3000) {
@@ -237,6 +270,7 @@ void loop() {
         }
     } 
     else {
+        is_full_redraw_needed = true;
         // Logic vẽ mặt
         last_shown_sec = -1; // Đảm bảo reset cờ đếm ngược
 
@@ -261,82 +295,59 @@ void loop() {
     if (current_time - last_debug_time >= 500) { 
         last_debug_time = current_time;
         
-        // Đọc atomic từng trường một
-        int dist[5];
-        for(int i=0; i<5; i++) dist[i] = sysData.dist[i].load();
+        // Lấy snapshot an toàn từ double buffer
+        SystemData snap = sysBuffer[read_index.load()];
         
-        float enemy_angle = sysData.enemy_angle.load();
-        float v_e = sysData.v_e.load();
-        bool isTargetLost = sysData.isTargetLost.load();
-        int current_PWM = sysData.current_PWM.load();
-        
-        int line[4];
-        for(int i=0; i<4; i++) line[i] = sysData.line[i].load();
-        
-        float pitch = sysData.pitch.load();
-        float roll = sysData.roll.load();
-        
-        bool edgeDetect = sysData.edgeDetect.load();
-        bool fallOut = sysData.fallOut.load();
-        bool liftedFront = sysData.liftedFront.load();
-        bool liftedRear = sysData.liftedRear.load();
-        bool beingLifted = sysData.beingLifted.load();
-        bool impactDetected = sysData.impactDetected.load();
-        bool closingFast = sysData.closingFast.load();
-        bool sideDanger = sysData.sideDanger.load();
-        bool flkPossible = sysData.flkPossible.load();
-        
-        RobotState state_snap = currentState;  // atomic nếu currentState là atomic
-        uint32_t current_state_time = millis() - state_start_time;  // state_start_time atomic
-
         Serial.println("================================================================");
         
         Serial.print("[FSM] STATE: ");
-        Serial.print(getStateName(state_snap));
+        Serial.print(getStateName(currentState));
         Serial.print(" | TimeInState: ");
-        Serial.print(current_state_time);
+        Serial.print(millis() - state_start_time);
         Serial.print(" ms | PWM Output: ");
-        Serial.println(current_PWM);
+        Serial.println(snap.current_PWM);   // snap có sẵn current_PWM
 
         Serial.print("[ToF] Dist: ");
         for(int i=0; i<5; i++) { 
-            Serial.print(dist[i]); Serial.print(" "); 
+            Serial.print(snap.dist[i]); Serial.print(" "); 
         }
         Serial.print(" | Target: ");
-        if (isTargetLost) {
+        if (snap.isTargetLost) {
             Serial.println("LOST");
         } else {
-            Serial.print(enemy_angle, 1);
+            Serial.print(snap.enemy_angle, 1);
             Serial.print(" deg | v_e: ");
-            Serial.print(v_e, 1);
+            Serial.print(snap.v_e, 1);
             Serial.println(" mm/s");
         }
 
         Serial.print("[TCRT] Line: ");
         for(int i=0; i<4; i++) { 
-            Serial.print(line[i]); Serial.print(" "); 
+            Serial.print(snap.line[i]); Serial.print(" "); 
         }
         Serial.print("| Bụng: ");
         Serial.println(analogRead(PIN_TCRT_DETECT));
 
         Serial.print("[IMU] P: ");
-        Serial.print(pitch, 1);
+        Serial.print(snap.pitch, 1);
         Serial.print(" | R: ");
-        Serial.print(roll, 1);
+        Serial.print(snap.roll, 1);
         Serial.print(" | [FLAGS]: ");
 
-        if(!edgeDetect && !fallOut && !liftedFront && !liftedRear && !beingLifted && !impactDetected && !closingFast && !sideDanger && !flkPossible) {
+        if(!snap.edgeDetect && !snap.fallOut && !snap.liftedFront && !snap.liftedRear && 
+        !snap.beingLifted && !snap.impactDetected && !snap.closingFast && 
+        !snap.sideDanger && !snap.flkPossible) {
             Serial.print("ALL CLEAR");
         } else {
-            if(edgeDetect) Serial.print("EDGE! ");
-            if(fallOut) Serial.print("FALL! ");
-            if(liftedFront) Serial.print("LIFT_F! ");
-            if(liftedRear) Serial.print("LIFT_R! ");
-            if(beingLifted) Serial.print("BEING_LIFTED! ");
-            if(impactDetected) Serial.print("IMPACT! ");
-            if(closingFast) Serial.print("RUSHING! ");
-            if(sideDanger) Serial.print("SIDE_DANGER! ");
-            if(flkPossible) Serial.print("FLANK_READY ");
+            if(snap.edgeDetect) Serial.print("EDGE! ");
+            if(snap.fallOut) Serial.print("FALL! ");
+            if(snap.liftedFront) Serial.print("LIFT_F! ");
+            if(snap.liftedRear) Serial.print("LIFT_R! ");
+            if(snap.beingLifted) Serial.print("BEING_LIFTED! ");
+            if(snap.impactDetected) Serial.print("IMPACT! ");
+            if(snap.closingFast) Serial.print("RUSHING! ");
+            if(snap.sideDanger) Serial.print("SIDE_DANGER! ");
+            if(snap.flkPossible) Serial.print("FLANK_READY ");
         }
         Serial.println("\n");
     }
