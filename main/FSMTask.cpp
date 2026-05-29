@@ -158,14 +158,7 @@ void TaskFSMCode(void * pvParameters) {
                     }
                 }
 
-                if (currentState == STATE_IDLE) {
-                    if (digitalRead(PIN_TTP223) == HIGH) {
-                        enterState(STATE_INIT_DELAY);
-                        DEBUG_PRINTLN(">>> START: INIT_DELAY (3 seconds)");
-                    }
-                } 
-                else if (currentState == STATE_INIT_DELAY) {
-                    if (fsm_current_time - state_start_time >= 3000) { // Hết 3s đếm ngược -> Đưa ra quyết định
+                if (fsm_current_time - state_start_time >= 3000) { // Hết 3s đếm ngược -> Đưa ra quyết định
                         float target_angle = getModeAngle(angle_histogram, HIST_SIZE); 
                         
                         if (localData.dist[0] < CONF_ENY) { // Địch trước mặt
@@ -977,7 +970,7 @@ const char* getStateName(RobotState state) {
         case STATE_ATK_DELAY_RUSH: return "DELAY_RUSH";
         case STATE_ATK_LOCK: return "LOCK";
         case STATE_ATK_STALEMATE_BRAKE: return "BRAKE";
-        case STATE_ATK_ANVIL_BREAKER: return "ANVIL_BRK"
+        case STATE_ATK_ANVIL_BREAKER: return "ANVIL_BRK";
         case STATE_DEF_ANTI_PUSH: return "ANTI_PUSH";
         case STATE_DEF_SIDE_GUARD: return "SIDE_GUARD";
         case STATE_DEF_REAR_GUARD: return "REAR_GUARD";

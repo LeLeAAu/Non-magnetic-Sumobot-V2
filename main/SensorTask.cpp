@@ -14,6 +14,10 @@
 static uint8_t tx_buffer[256];
 static uint8_t cobs_buffer[256];
 
+// Lịch sử cảm biến
+static uint16_t dist_history[5][3];
+static uint8_t dist_idx[5] = {0, 0, 0, 0, 0};
+
 // HÀM PHỤ TRỢ
 // Chuyển đổi PWM sang vận tốc tuyến tính xấp xỉ mm/s
 float getEstimatedVelocity(int pwm) {
@@ -24,7 +28,7 @@ float getEstimatedVelocity(int pwm) {
 
 // Hàm tính Median siêu tốc cho 3 phần tử
 // Chỉ tốn tối đa 3 phép so sánh thay vì dùng vòng lặp for/while
-uint16_t getMedian(uint16_t* history_array, uint8_t size) {
+uint16_t getMedian(uint16_t* history_array) {
     uint16_t a = history_array[0];
     uint16_t b = history_array[1];
     uint16_t c = history_array[2];
@@ -77,7 +81,7 @@ void TaskSensorCode(void * pvParameters) {
                 if (currentState == STATE_IDLE || currentState == STATE_INIT_DELAY) {
                     dist_history[i][dist_idx[i]] = raw_dist;
                     dist_idx[i] = (dist_idx[i] + 1) % MEDIAN_WINDOW;
-                    tempData.dist[i] = getMedian(dist_history[i], MEDIAN_WINDOW);
+                    tempData.dist[i] = getMedian(dist_history[i]);
                     last_valid_dist[i] = tempData.dist[i];
                 } else { // Các trạng thái khác cần tốc độ cao nên dùng Spike Filter (Lọc gai nhiễu)
                     int delta_dist = (int)raw_dist - (int)last_valid_dist[i];
@@ -306,12 +310,7 @@ void TaskSensorCode(void * pvParameters) {
         // Lật bài, kích hoạt buffer vừa ghi thành buffer cho FSM đọc
         read_index.store(write_index); 
 
-        // Giữ nguyên lệnh Notify để đánh thức FSM ngay lập tức nếu có biến cố nguy hiểm
-        if (tempData.edgeDetect || tempData.fallOut || tempData.beingLifted || tempData.impactDetected) {
-            if (TaskFSMHandle != NULL) xTaskNotifyGive(TaskFSMHandle);
-        }
-
-        // Ngắt mềm
+        // Ngắt mềm (Giữ nguyên lệnh Notify để đánh thức FSM)
         // Nếu phát hiện các event nguy hiểm -> không đợi FSM ở Core 1 tự quay lại loop -> Core 0 phát tín hiệu TaskNotify vào thẳng FSM ép nó wake up xử lí ngay trong 0ms
         if (tempData.edgeDetect || tempData.fallOut || tempData.beingLifted || tempData.impactDetected) {
             if (TaskFSMHandle != NULL) xTaskNotifyGive(TaskFSMHandle);

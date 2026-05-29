@@ -198,10 +198,6 @@ extern uint32_t go_start_time;
 extern uint32_t state_start_time;
 extern bool state_just_entered;
 
-// Lịch sử cảm biến
-extern uint16_t dist_history[5][3];
-extern uint8_t dist_idx[5];
-
 // Đối tượng Cảm biến & Task (Chạy đa luồng)
 extern VL53L1X sensorsToF[5]; 
 extern LSM6DS3 myIMU;

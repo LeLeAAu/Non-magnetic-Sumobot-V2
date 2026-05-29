@@ -8,23 +8,7 @@
 
 // KHÔNG ĐƯỢC GIẢM BUDGET setMeasurementTimingBudget(33000) XUỐNG VÌ SẼ GÂY RA LỖI
 
-// Problems
-/*
 
-
-*/
-
-// Todo list (dùng cho tất cả các file kể cả file main.ino này)
-/*
-
-
-- Trong STATE_ATK_LOCK, thay vì chỉ kiểm tra sideDanger, hãy thêm kiểu:
-    if (tempData.flkPossible && fabsf(err_angle) > ANGLE_TIGHT) {
-        enterState(STATE_ATK_FLANK_SIDE);
-        break;
-    }
-
-*/
 
 // Qs - Ans
 /*
@@ -69,8 +53,6 @@ TaskHandle_t TaskSensorHandle = NULL;
 TaskHandle_t TaskFSMHandle = NULL;
 
 // Config cảm biến
-uint16_t dist_history[5][3]; // MEDIAN_WINDOW = 3
-uint8_t dist_idx[5] = {0, 0, 0, 0, 0};
 VL53L1X sensorsToF[5]; 
 LSM6DS3 myIMU(I2C_MODE, 0x6B); 
 
@@ -157,7 +139,7 @@ void setup() {
     // Kích hoạt đa nhiệm, đẩy các Task vào các Core tương ứng
     xTaskCreatePinnedToCore(TaskSensorCode, "TaskSensor", 10000, NULL, 1, &TaskSensorHandle, 0);
     xTaskCreatePinnedToCore(TaskFSMCode, "TaskFSM", 10000, NULL, 2, &TaskFSMHandle, 1);
-#if DEBUG_LEVEL > 0
+#if DEBUG_LEVEL >= 1
     xTaskCreatePinnedToCore(TelemetryRxTask, "TelemetryRx", 4096, NULL, 1, NULL, 1);
 #endif
 }
@@ -274,6 +256,64 @@ void sendAllParameters() {
     Serial.write(cobs_buf, cobs_len);
     Serial.write(0x00);
 }
+
+#if DEBUG_LEVEL >= 2
+void printDebugInfo(const SystemData& snap) {
+    DEBUG_PRINTLN("================================================================");
+    
+    Serial.print("[FSM] STATE: ");
+    Serial.print(getStateName(currentState));
+    Serial.print(" | TimeInState: ");
+    Serial.print(millis() - state_start_time);
+    Serial.print(" ms | PWM Output: ");
+    DEBUG_PRINTLN(snap.current_PWM);
+
+    Serial.print("[ToF] Dist: ");
+    for(int i=0; i<5; i++) { 
+        Serial.print(snap.dist[i]); Serial.print(" "); 
+    }
+    Serial.print(" | Target: ");
+    if (snap.isTargetLost) {
+        DEBUG_PRINTLN("LOST");
+    } else {
+        Serial.print(snap.enemy_angle, 1);
+        Serial.print(" deg | v_e: ");
+        Serial.print(snap.v_e, 1);
+        DEBUG_PRINTLN(" mm/s");
+    }
+
+    Serial.print("[TCRT] Line: ");
+    for(int i=0; i<4; i++) { 
+        Serial.print(snap.line[i]); Serial.print(" "); 
+    }
+    Serial.print("| Bụng: ");
+    DEBUG_PRINTLN(analogRead(PIN_TCRT_DETECT));
+
+    Serial.print("[IMU] P: ");
+    Serial.print(snap.pitch, 1);
+    Serial.print(" | R: ");
+    Serial.print(snap.roll, 1);
+    Serial.print(" | [FLAGS]: ");
+
+    if(!snap.edgeDetect && !snap.fallOut && !snap.liftedFront && !snap.liftedRear && 
+       !snap.beingLifted && !snap.impactDetected && !snap.closingFast && 
+       !snap.sideDanger && !snap.flkPossible) {
+        Serial.print("ALL CLEAR");
+    } else {
+        if(snap.edgeDetect) Serial.print("EDGE! ");
+        if(snap.fallOut) Serial.print("FALL! ");
+        if(snap.liftedFront) Serial.print("LIFT_F! ");
+        if(snap.liftedRear) Serial.print("LIFT_R! ");
+        if(snap.beingLifted) Serial.print("BEING_LIFTED! ");
+        if(snap.impactDetected) Serial.print("IMPACT! ");
+        if(snap.closingFast) Serial.print("RUSHING! ");
+        if(snap.sideDanger) Serial.print("SIDE_DANGER! ");
+        if(snap.flkPossible) Serial.print("FLANK_READY ");
+    }
+    DEBUG_PRINTLN("\n");
+}
+#endif
+
 void loop() {
     uint32_t current_time = millis();
 
@@ -328,11 +368,10 @@ void loop() {
                     display.setCursor(0, 16); 
                     if (snap.isTargetLost) {
                         display.println("Target: LOST");
-                        display.printf("Dist: %d mm\n", snap.dist[0]);
                     } else {
                         display.printf("Target: %.1f deg\n", snap.enemy_angle);
-                        display.printf("Dist: %d mm\n", snap.dist[0]);
                     }
+                    display.printf("Dist: %d mm\n", snap.dist[0]);
                 } else {  // Quá 30 giây -> Lim dim ngủ
                     if (is_full_redraw_needed) {
                         display.clearDisplay();
@@ -419,62 +458,8 @@ void loop() {
     static uint32_t last_debug_time = 0;
     if (current_time - last_debug_time >= 500) { 
         last_debug_time = current_time;
-        
-        // Lấy snapshot an toàn từ double buffer
         SystemData snap = sysBuffer[read_index.load()];
-        
-        DEBUG_PRINTLN("================================================================");
-        
-        Serial.print("[FSM] STATE: ");
-        Serial.print(getStateName(currentState));
-        Serial.print(" | TimeInState: ");
-        Serial.print(millis() - state_start_time);
-        Serial.print(" ms | PWM Output: ");
-        DEBUG_PRINTLN(snap.current_PWM);   // snap có sẵn current_PWM
-
-        Serial.print("[ToF] Dist: ");
-        for(int i=0; i<5; i++) { 
-            Serial.print(snap.dist[i]); Serial.print(" "); 
-        }
-        Serial.print(" | Target: ");
-        if (snap.isTargetLost) {
-            DEBUG_PRINTLN("LOST");
-        } else {
-            Serial.print(snap.enemy_angle, 1);
-            Serial.print(" deg | v_e: ");
-            Serial.print(snap.v_e, 1);
-            DEBUG_PRINTLN(" mm/s");
-        }
-
-        Serial.print("[TCRT] Line: ");
-        for(int i=0; i<4; i++) { 
-            Serial.print(snap.line[i]); Serial.print(" "); 
-        }
-        Serial.print("| Bụng: ");
-        DEBUG_PRINTLN(analogRead(PIN_TCRT_DETECT));
-
-        Serial.print("[IMU] P: ");
-        Serial.print(snap.pitch, 1);
-        Serial.print(" | R: ");
-        Serial.print(snap.roll, 1);
-        Serial.print(" | [FLAGS]: ");
-
-        if(!snap.edgeDetect && !snap.fallOut && !snap.liftedFront && !snap.liftedRear && 
-        !snap.beingLifted && !snap.impactDetected && !snap.closingFast && 
-        !snap.sideDanger && !snap.flkPossible) {
-            Serial.print("ALL CLEAR");
-        } else {
-            if(snap.edgeDetect) Serial.print("EDGE! ");
-            if(snap.fallOut) Serial.print("FALL! ");
-            if(snap.liftedFront) Serial.print("LIFT_F! ");
-            if(snap.liftedRear) Serial.print("LIFT_R! ");
-            if(snap.beingLifted) Serial.print("BEING_LIFTED! ");
-            if(snap.impactDetected) Serial.print("IMPACT! ");
-            if(snap.closingFast) Serial.print("RUSHING! ");
-            if(snap.sideDanger) Serial.print("SIDE_DANGER! ");
-            if(snap.flkPossible) Serial.print("FLANK_READY ");
-        }
-        DEBUG_PRINTLN("\n");
+        printDebugInfo(snap);
     }
 #endif
 
