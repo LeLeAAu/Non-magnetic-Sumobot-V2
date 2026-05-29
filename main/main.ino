@@ -17,11 +17,7 @@
 // Todo list (dùng cho tất cả các file kể cả file main.ino này)
 /*
 
-- Thêm một trạng thái tấn công mới: STATE_ATK_ANVIL_BREAKER
-    + Kích hoạt: Khi STATE_ATK_LOCK thất bại sau 2 lần lock_retries và localData.v_e (vận tốc đối thủ) là rất nhỏ (ví dụ < 50mm/s). Điều này có nghĩa đối thủ đang "đứng yên" hoặc "bám sàn" như Anvil.
-    + Hành vi
-        ~ Không lao thẳng vào. Thay vào đó, thực hiện một cú "giật lùi" nhanh (-PWM_MAX, -PWM_MAX trong 100ms) để tạo khoảng cách.
-        ~ Sau đó, thực hiện một pha tạt sườn với bán kính cực lớn (driveBot(180, 50) hoặc driveBot(50, 180) tùy hướng) để tiếp cận từ góc 45 độ.
+
 - Trong STATE_ATK_LOCK, thay vì chỉ kiểm tra sideDanger, hãy thêm kiểu:
     if (tempData.flkPossible && fabsf(err_angle) > ANGLE_TIGHT) {
         enterState(STATE_ATK_FLANK_SIDE);

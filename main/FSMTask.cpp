@@ -524,13 +524,19 @@ void TaskFSMCode(void * pvParameters) {
                             DEBUG_PRINTLN(">>> LOCK SUCCESS -> ENEMY RUSHING -> DELAY RUSH!");
                         } 
                         else {
-                            // PHÁ THẾ BÁM SÀN (ANVIL) SAU 2 LẦN STRIKE THẤT BẠI
-                            // Thay thế hoàn toàn cơ chế random FEINT_CHANCE cũ
-                            if (failed_strike_count >= 2) {
-                                enterState(STATE_ATK_FEINT);
-                                failed_strike_count = 0; // Đã lừa thế bẻ sườn chiến thuật thành công thì reset nợ
+                            // PHÁ THẾ BÁM SÀN (ANVIL) HOẶC TACTICAL FEINT
+                            if (failed_strike_count >= 2 || lock_retries >= 2) {
+                                if (fabsf(localData.v_e) < 50.0) {
+                                    // Địch lỳ đòn, vận tốc cực nhỏ -> Kích hoạt Anvil Breaker
+                                    enterState(STATE_ATK_ANVIL_BREAKER);
+                                    DEBUG_PRINTLN(">>> ANVIL DETECTED (LOW V_E) -> ANVIL BREAKER!");
+                                } else {
+                                    // Địch vẫn di chuyển nhanh -> Lừa đòn
+                                    enterState(STATE_ATK_FEINT);
+                                    DEBUG_PRINTLN(">>> 2 STRIKES FAILED -> TACTICAL FEINT!");
+                                }
+                                failed_strike_count = 0; 
                                 lock_retries = 0;
-                                DEBUG_PRINTLN(">>> LOCK SUCCESS -> 2 STRIKES FAILED (ANVIL DETECTED) -> TACTICAL FEINT!");
                             } else {
                                 enterState(STATE_ATK_STRIKE); // Đâm thẳng mặt mặc định nếu chưa đủ điều kiện
                                 lock_retries = 0; 
@@ -847,6 +853,48 @@ void TaskFSMCode(void * pvParameters) {
                 break;
             }
 
+            case STATE_ATK_ANVIL_BREAKER:
+            {
+                uint32_t elapsed_time = fsm_current_time - state_start_time;
+                static int turn_dir = 1;
+
+                // Xác định hướng tạt sườn dựa trên vị trí địch ở khoảnh khắc bắt đầu
+                if (state_just_entered) {
+                    turn_dir = (localData.enemy_angle < 0) ? -1 : 1; 
+                }
+
+                // Phase 1: Giật lùi nhanh trong 100ms để tạo không gian
+                if (elapsed_time < 100) {
+                    driveBot(-PWM_MAX, -PWM_MAX); 
+                } 
+                // Phase 2: Tạt sườn cung rộng (45 độ)
+                else if (elapsed_time < 500) { 
+                    if (turn_dir == 1) {
+                        driveBot(180, 50); // Lượn sang phải
+                    } else {
+                        driveBot(50, 180); // Lượn sang trái
+                    }
+                } 
+                // Phase 3: Kết thúc lượn, kiểm tra lại tình hình
+                else {
+                    if (localData.dist[0] < WARN_DIST) {
+                        enterState(STATE_ATK_STRIKE);
+                        DEBUG_PRINTLN(">>> ANVIL BREAKER DONE -> ENEMY IN RANGE -> STRIKE!");
+                    } else {
+                        enterState(STATE_ATK_LOCK);
+                        DEBUG_PRINTLN(">>> ANVIL BREAKER DONE -> RE-LOCK!");
+                    }
+                }
+                
+                // An toàn: Thoát khẩn cấp nếu bị đâm vào sườn trong lúc đang lượn
+                if (elapsed_time > 100 && localData.impactDetected) {
+                    enterState(STATE_DEF_ANTI_PUSH);
+                    DEBUG_PRINTLN(">>> INTERRUPT: IMPACT DURING ANVIL BREAKER -> ANTI_PUSH!");
+                }
+                
+                break;
+            }
+
             default:
                 enterState(STATE_IDLE);
                 driveBot(0, 0);
@@ -929,6 +977,7 @@ const char* getStateName(RobotState state) {
         case STATE_ATK_DELAY_RUSH: return "DELAY_RUSH";
         case STATE_ATK_LOCK: return "LOCK";
         case STATE_ATK_STALEMATE_BRAKE: return "BRAKE";
+        case STATE_ATK_ANVIL_BREAKER: return "ANVIL_BRK"
         case STATE_DEF_ANTI_PUSH: return "ANTI_PUSH";
         case STATE_DEF_SIDE_GUARD: return "SIDE_GUARD";
         case STATE_DEF_REAR_GUARD: return "REAR_GUARD";
