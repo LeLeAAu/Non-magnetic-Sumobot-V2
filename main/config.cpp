@@ -58,7 +58,6 @@ const float ANGLE_REAR = -120.0; // Góc nhận diện địch phía sau
 const float ANGLE_BIN_RES = 5.0; // Độ phân giải Histogram
 volatile float KP_STEERING = 4.0;  // Hệ số tỉ lệ điều hướng
 const float ANGLE_SLOPPY = 30.0; // Góc lệch tối đa (vẫn cho phép ủi) khi đã rúc sát gầm địch
-volatile uint8_t FEINT_CHANCE = 25; // Tỷ lệ % tung đòn giả (Feint)
 
 const uint16_t DIST_BLIND = 2000; // Khoảng cách coi như mù
 const uint16_t DIST_CLOSE = 150;  // Vùng tử thần áp sát gầm

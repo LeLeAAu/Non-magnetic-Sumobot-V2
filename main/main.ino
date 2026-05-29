@@ -10,7 +10,7 @@
 
 // Problems
 /*
-- Đòn giả FEINT_CHANCE = 25 random thuần túy -> Chuyển thành trigger có điều kiện: sau 2 lần ATK_STRIKE thất bại (v_e < 50mm/s), hoặc khi isTargetLost < 200ms
+
 - ATK_LOCK_TIME = 500 cố định -> Scale theo dist[0]: lock_time = map(dist[0], 200, 1500, 200, 700) để ngắm chính xác hơn ở cự ly khác nhau
 - biến last_tof_update nhưng chỉ dùng để set tempData.dist[i] = 8190; khi timeout. Tuyệt vời. Nhưng nếu ToF bị treo ở mức thấp hơn, nó vẫn có thể gây ra dữ liệu sai. -> Trong SensorTask, nếu current_time - last_tof_update[i] > 1000 (1 giây không data), hãy thực hiện hard reset cảm biến đó bằng cách kéo chân XSHUT xuống LOW trong 50ms rồi lên HIGH, và gọi lại init() cho nó.
 - chỉ kiểm tra myIMU.begin() != 0 một lần duy nhất ở setup(), khiến IMU có thể bị treo nếu va đập mạnh ->  thêm một biến last_imu_update. Nếu current_time - last_imu_update > 200ms, hãy gọi myIMU.begin() lại để khởi tạo lại

@@ -12,7 +12,8 @@ float getModeAngle(float* history, int size);
 
 void TaskFSMCode(void * pvParameters) {
    // Khởi tạo bộ nhớ chiễn thuật ĩnh
-    
+    static uint8_t failed_strike_count = 0;     // Đếm số lần ủi bế tắc
+    static uint32_t target_lost_start_time = 0; // Theo dõi thời gian mất dấu
     // Biến cho việc build Histogram trong lúc chờ
     const int HIST_SIZE = 50;
     static float angle_histogram[HIST_SIZE];
@@ -43,6 +44,14 @@ void TaskFSMCode(void * pvParameters) {
             continue;                     // Bỏ qua chu kỳ logic FSM lỗi này
         }
         // TỪ ĐÂY TRỞ XUỐNG, CHỈ SỬ DỤNG localData. TUYỆT ĐỐI KHÔNG GỌI sysData
+
+        // Cập nhật bộ đếm thời gian mất dấu
+        if (localData.isTargetLost) {
+            if (target_lost_start_time == 0) target_lost_start_time = fsm_current_time;
+        } else {
+            target_lost_start_time = 0;
+        }
+        uint32_t lost_duration = (target_lost_start_time > 0) ? (fsm_current_time - target_lost_start_time) : 0;
 
         // Global Safety layer
         bool is_self_jerk_blind_time = (fsm_current_time - state_start_time < 250);
@@ -445,11 +454,19 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (state_just_entered) stalemate_cycles = 0;
 
-                // AN TOÀN: Mất mục tiêu hoàn toàn khỏi 5 mắt (Khoảng mù)
-                if (localData.dist[0] > CONF_ENY && localData.dist[1] > CONF_ENY && 
-                    localData.dist[2] > CONF_ENY && localData.dist[3] > CONF_ENY && 
-                    localData.dist[4] > CONF_ENY) {
+                // PHẢN XẠ TẠT MÚ KHI ĐỊCH LÁCH GẮT / MẤT DẤU CHỚP NHOÁNG (< 200ms)
+                if (localData.isTargetLost) {
                     
+                    // Nếu thời gian mất dấu nhỏ hơn 200ms -> Lập tức tung đòn giả để quét sườn đánh chặn
+                    if (lost_duration < 200) {
+                        enterState(STATE_ATK_FEINT);
+                        failed_strike_count = 0; // Xóa đếm để chuẩn bị chu kỳ combat mới
+                        lock_retries = 0;
+                        DEBUG_PRINTLN(">>> TARGET FLASH-LOST (<200ms) -> REFLEX FEINT!");
+                        break;
+                    }
+
+                    // Nếu mất dấu lâu hơn 200ms -> Chuyển sang cơ chế dừng xe ngắm lại / tìm kiếm nguyên bản
                     lock_retries++;
                     driveBot(0, 0); 
 
@@ -463,7 +480,7 @@ void TaskFSMCode(void * pvParameters) {
                     break;
                 }
 
-                // Điều hướng mục tiêu vào chính diện
+                // ĐIỀU HƯỚNG MỤC TIÊU VÀO CHÍNH DIỆN
                 float err_angle = localData.enemy_angle; 
                 int forward_pwm = 0;
                 int turn_pwm = 0;
@@ -488,7 +505,7 @@ void TaskFSMCode(void * pvParameters) {
                     }
                 }
 
-                // Điều kiện ra đòn
+                // KIỂM TRA ĐIỀU KIỆN RA ĐÒN
                 bool is_ready_to_strike = false;
                 if (localData.dist[0] < WARN_DIST && fabsf(err_angle) <= ANGLE_WIDE) {
                     is_ready_to_strike = true;
@@ -499,27 +516,38 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (is_ready_to_strike) {
                     if (!localData.sideDanger) {
-                        // Decision Tree
+                        
+                        // Cây quyết định chiến thuật (Decision Tree)
                         if (localData.closingFast) {
-                            enterState(STATE_ATK_DELAY_RUSH); // Địch đang lao tới nhanh
+                            enterState(STATE_ATK_DELAY_RUSH); // Địch đang lao tới nhanh -> Bẩy Judo
                             lock_retries = 0;
                             DEBUG_PRINTLN(">>> LOCK SUCCESS -> ENEMY RUSHING -> DELAY RUSH!");
                         } 
                         else {
-                            if (localData.dist[0] > DIST_CLOSE && (esp_random() % 100 < FEINT_CHANCE)) {
+                            // PHÁ THẾ BÁM SÀN (ANVIL) SAU 2 LẦN STRIKE THẤT BẠI
+                            // Thay thế hoàn toàn cơ chế random FEINT_CHANCE cũ
+                            if (failed_strike_count >= 2) {
                                 enterState(STATE_ATK_FEINT);
+                                failed_strike_count = 0; // Đã lừa thế bẻ sườn chiến thuật thành công thì reset nợ
                                 lock_retries = 0;
-                                DEBUG_PRINTLN(">>> LOCK SUCCESS -> TACTICAL FEINT!"); // Địch ở hơi xa -> nhử mồi (25%)
+                                DEBUG_PRINTLN(">>> LOCK SUCCESS -> 2 STRIKES FAILED (ANVIL DETECTED) -> TACTICAL FEINT!");
                             } else {
-                                enterState(STATE_ATK_STRIKE); // Đâm thẳng mặt
+                                enterState(STATE_ATK_STRIKE); // Đâm thẳng mặt mặc định nếu chưa đủ điều kiện
                                 lock_retries = 0; 
                                 DEBUG_PRINTLN(">>> LOCK SUCCESS -> DEFAULT STRIKE!");
                             }
                         }
                     }
                 }
+
+                // KIỂM SOÁT TIMEOUT ĐỘNG THEO CỰ LY
+                uint32_t current_lock_timeout = constrain(
+                    map(localData.dist[0], 200, 1500, 200, 700), 
+                    200, 
+                    700
+                );
                 
-                // KIỂM SOÁT TIMEOUT CỰC ĐOAN (Bế tắc vật lý)
+                // KIỂM SOÁT TIMEOUT CỰC ĐOAN (Bế tắc vật lý - Giữ nguyên)
                 if (elapsed_time > ATK_LOCK_TIME) {
                     if (localData.dist[0] < CONF_ENY) {
                         enterState(STATE_ATK_STRIKE);
@@ -559,9 +587,11 @@ void TaskFSMCode(void * pvParameters) {
                     }
                 }
 
+                // Nếu hất tung được địch -> Cú STRIKE cực kì thành công -> Reset bộ đếm
                 if (localData.liftDetected) {
+                    failed_strike_count = 0; 
                     enterState(STATE_ATK_LIFT);
-                    DEBUG_PRINTLN(">>> STRIKE -> ENEMY LIFTED -> ATK_LIFT (FULL POWER)!"); // Chui được gầm địch thì đẩy hết cỡ
+                    DEBUG_PRINTLN(">>> STRIKE -> ENEMY LIFTED -> ATK_LIFT (FULL POWER)!"); 
                     break;
                 }
 
@@ -569,6 +599,9 @@ void TaskFSMCode(void * pvParameters) {
                 // - Hụt mục tiêu do đối thủ lùi nhanh hơn hoặc bị hất văng: dist > WARN_DIST
                 // - Lệch góc quá nhiều: angle > 20 độ
                 if (localData.dist[0] > WARN_DIST || fabsf(localData.enemy_angle) > 20.0) {
+                    // Nếu đẩy hụt mà v_e < 50, nghĩa là địch đang lỳ đòn và ta tự trượt góc -> Fail
+                    if (localData.v_e < 50.0) failed_strike_count++; 
+                    
                     enterState(STATE_ATK_LOCK); 
                     DEBUG_PRINTLN(">>> STRIKE SLIP/AWAY -> RE-LOCK");
                     break;
@@ -579,8 +612,11 @@ void TaskFSMCode(void * pvParameters) {
                 // Việc ủi thẳng mãi sẽ làm cháy động cơ/tuột bánh răng.
                 // Giải pháp: Kích hoạt tự hãm của Worm Gear bằng cách phanh cứng 0 PWM.
                 if (elapsed_time > TIMEOUT_MAX) {
-                enterState(STATE_ATK_STALEMATE_BRAKE);
-                DEBUG_PRINTLN(">>> STALEMATE TIMEOUT -> WORM GEAR BRAKE (STAND YOUR GROUND)!");
+                    // Giằng co hết 1.4s mà v_e < 50 -> Địch bám sàn quá tốt -> Fail
+                    if (localData.v_e < 50.0) failed_strike_count++; 
+                    
+                    enterState(STATE_ATK_STALEMATE_BRAKE);
+                    DEBUG_PRINTLN(">>> STALEMATE TIMEOUT -> WORM GEAR BRAKE (STAND YOUR GROUND)!");
                 }
 
         break;

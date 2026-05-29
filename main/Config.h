@@ -125,7 +125,6 @@ extern const float ANGLE_REAR;
 extern const float ANGLE_BIN_RES;
 extern volatile float KP_STEERING;
 extern const float ANGLE_SLOPPY;
-extern volatile uint8_t FEINT_CHANCE;
 
 extern const uint16_t DIST_BLIND;
 extern const uint16_t DIST_CLOSE;
