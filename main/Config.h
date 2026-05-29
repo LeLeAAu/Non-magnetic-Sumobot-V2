@@ -36,8 +36,6 @@
 #define OLED_SDA 23
 #define OLED_SCL 5
 
-// Chân điều khiển XSHUT để khởi tạo địa chỉ động cho 5 cảm biến ToF
-const uint8_t XSHUT_PINS[5] = {27, 14, 13, 16, 17}; // Giữa, Trái, Phải, Sườn Trái, Sườn Phải
 
 // Chân cảm biến dò line
 #define PIN_TCRT_DETECT 39 // Phát hiện đối thủ
@@ -130,6 +128,8 @@ extern const uint16_t DIST_BLIND;
 extern const uint16_t DIST_CLOSE;
 
 extern const uint8_t MEDIAN_WINDOW;
+extern const uint8_t XSHUT_PINS[5];
+extern const uint8_t VLX_ADDRESSES[5];
 
 
 

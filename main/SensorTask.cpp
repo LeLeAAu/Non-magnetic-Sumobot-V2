@@ -301,7 +301,6 @@ void TaskSensorCode(void * pvParameters) {
 
             // Kiểm tra ToF Timeout & Hard Reset
             for (int i = 0; i < 5; i++) {
-                // last_tof_update[i] đã được khai báo sẵn trong code cũ của bạn
                 if (current_time - last_tof_update[i] > 1000) {
                     is_error_now = true;
                     DEBUG_PRINTF(">>> SENSOR HEALTH: ToF %d TIMEOUT! Hard Resetting...\n", i);
@@ -309,17 +308,23 @@ void TaskSensorCode(void * pvParameters) {
                     // Ép reset cứng bằng chân XSHUT
                     digitalWrite(XSHUT_PINS[i], LOW);
                     vTaskDelay(pdMS_TO_TICKS(50));
+                    
+                    // Cấp nguồn lại và đợi IC khởi động
                     digitalWrite(XSHUT_PINS[i], HIGH);
-                    vTaskDelay(pdMS_TO_TICKS(10));
+                    vTaskDelay(pdMS_TO_TICKS(15)); // Khuyến cáo của datasheet là chờ ít nhất 1.2ms
                     
-                    // Khởi tạo lại
-                    sensorsToF[i].init();
-                    sensorsToF[i].setAddress(VLX_ADDRESSES[i]);
-                    sensorsToF[i].setDistanceMode(VL53L1X::Long);
-                    sensorsToF[i].setMeasurementTimingBudget(33000);
-                    sensorsToF[i].startContinuous(34);
-                    
-                    last_tof_update[i] = current_time; // Cho nó thêm cơ hội sống 1s nữa
+                    // Cố gắng khởi tạo lại (bỏ qua nếu I2C bus bị treo)
+                    if (sensorsToF[i].init()) {
+                        sensorsToF[i].setAddress(VLX_ADDRESSES[i]);
+                        sensorsToF[i].setDistanceMode(VL53L1X::Long);
+                        sensorsToF[i].setMeasurementTimingBudget(33000);
+                        sensorsToF[i].startContinuous(34);
+                        
+                        DEBUG_PRINTF(">>> ToF %d Revived!\n", i);
+                        last_tof_update[i] = current_time; // Gia hạn mạng sống thêm 1s
+                    } else {
+                        DEBUG_PRINTF(">>> ToF %d Reset FAILED!\n", i);
+                    }
                 }
             }
 

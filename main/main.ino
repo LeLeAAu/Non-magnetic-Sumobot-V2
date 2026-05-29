@@ -11,8 +11,6 @@
 // Problems
 /*
 
-- ATK_LOCK_TIME = 500 cố định -> Scale theo dist[0]: lock_time = map(dist[0], 200, 1500, 200, 700) để ngắm chính xác hơn ở cự ly khác nhau
-- biến last_tof_update nhưng chỉ dùng để set tempData.dist[i] = 8190; khi timeout. Tuyệt vời. Nhưng nếu ToF bị treo ở mức thấp hơn, nó vẫn có thể gây ra dữ liệu sai. -> Trong SensorTask, nếu current_time - last_tof_update[i] > 1000 (1 giây không data), hãy thực hiện hard reset cảm biến đó bằng cách kéo chân XSHUT xuống LOW trong 50ms rồi lên HIGH, và gọi lại init() cho nó.
 - chỉ kiểm tra myIMU.begin() != 0 một lần duy nhất ở setup(), khiến IMU có thể bị treo nếu va đập mạnh ->  thêm một biến last_imu_update. Nếu current_time - last_imu_update > 200ms, hãy gọi myIMU.begin() lại để khởi tạo lại
 */
 
@@ -78,7 +76,6 @@ TaskHandle_t TaskFSMHandle = NULL;
 uint16_t dist_history[5][3]; // MEDIAN_WINDOW = 3
 uint8_t dist_idx[5] = {0, 0, 0, 0, 0};
 VL53L1X sensorsToF[5]; 
-const uint8_t VLX_ADDRESSES[5] = {0x30, 0x31, 0x32, 0x33, 0x34};
 LSM6DS3 myIMU(I2C_MODE, 0x6B); 
 
 void setup() {
@@ -228,7 +225,6 @@ void updateParameter(uint16_t param_id, float value) {
             case 8:  V_MAX_60 = value; break;
             case 9:  OMEGA_60 = value; break;
             case 10: KP_STEERING = value; break;
-            case 11: FEINT_CHANCE = (uint8_t)value; break;
             case 12: ATK_LOCK_TIME = (uint32_t)value; break;
             default: break;
         }
@@ -237,7 +233,7 @@ void updateParameter(uint16_t param_id, float value) {
     }
 }
 void sendAllParameters() {
-    uint8_t payload[12 * 6]; // 12 tham số, mỗi tham số gồm 2 byte ID + 4 byte Float
+    uint8_t payload[11 * 6]; // 11 tham số, mỗi tham số gồm 2 byte ID + 4 byte Float
     int idx = 0;
 
     // Biểu thức Lambda hỗ trợ đóng gói nhanh dữ liệu
@@ -259,7 +255,6 @@ void sendAllParameters() {
         packParam(8,  V_MAX_60);
         packParam(9,  OMEGA_60);
         packParam(10, KP_STEERING);
-        packParam(11, (float)FEINT_CHANCE);
         packParam(12, (float)ATK_LOCK_TIME);
         xSemaphoreGive(paramMutex);
     }

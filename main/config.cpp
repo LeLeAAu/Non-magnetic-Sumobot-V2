@@ -63,3 +63,6 @@ const uint16_t DIST_BLIND = 2000; // Khoảng cách coi như mù
 const uint16_t DIST_CLOSE = 150;  // Vùng tử thần áp sát gầm
 
 const uint8_t MEDIAN_WINDOW = 3; // Lọc Median cho cảm biến khoảng cách
+
+const uint8_t XSHUT_PINS[5] = {27, 14, 13, 16, 17};
+const uint8_t VLX_ADDRESSES[5] = {0x30, 0x31, 0x32, 0x33, 0x34};
