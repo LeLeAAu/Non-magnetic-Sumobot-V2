@@ -1,0 +1,4 @@
+VN:
+1. Nạp firmware
+2. Chạy Py.
+3. Kết nối ESP32

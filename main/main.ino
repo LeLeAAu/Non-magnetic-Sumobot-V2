@@ -19,7 +19,7 @@
 
 // Todo list (dùng cho tất cả các file kể cả file main.ino này)
 /*
-
+- Thêm telemetry binary (COBS/Protobuf) 
 - Thêm checkSensorHealth() mỗi 1s: timeout ToF, IMU disconnect, TCRT stuck. Nếu lỗi >3 lần → STATE_DEF_LAST_STAND
 - Thêm một trạng thái tấn công mới: STATE_ATK_ANVIL_BREAKER
     + Kích hoạt: Khi STATE_ATK_LOCK thất bại sau 2 lần lock_retries và localData.v_e (vận tốc đối thủ) là rất nhỏ (ví dụ < 50mm/s). Điều này có nghĩa đối thủ đang "đứng yên" hoặc "bám sàn" như Anvil.
@@ -40,12 +40,19 @@
 
 */
 
+// CMD: pip install pyserial numpy matplotlib
+
 #include "Config.h"
 #include "MotorControl.h"
 #include "DisplayFace.h"
 #include "SensorTask.h"
 #include "FSMTask.h"
 #include <atomic>
+#include "COBS.h"
+#include "crc16.h"
+#include <freertos/semphr.h>
+
+SemaphoreHandle_t paramMutex;
 
 // Khởi tạo đối tượng hệ thống
 TwoWire I2COLED = TwoWire(1);
@@ -54,7 +61,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &I2COLED, OLED_RESET);
 // Quản lí dữ liệu và trạng thái toàn cục
 SystemData sysBuffer[2];               // Double-Buffer // thay thế cho sysData đơn
 std::atomic<uint8_t> read_index(0);    // Con trỏ nguyên tử chỉ vị trí buffer FSM sẽ đọc
-std::atomic<int> active_pwm(0);        // Tách riêng PWM ra biến atomic để tránh ghi đè chéo
+std::atomic<uint8_t> active_pwm(0);       // Tách riêng PWM ra biến atomic để tránh ghi đè chéo
 volatile RobotState currentState = STATE_IDLE;
 volatile RobotState previousState = STATE_IDLE;
 volatile bool needsDisplayUpdate = false;
@@ -78,6 +85,7 @@ LSM6DS3 myIMU(I2C_MODE, 0x6B);
 
 void setup() {
     Serial.begin(115200);
+    paramMutex = xSemaphoreCreateMutex();
     // Khởi tạo OLED sớm để hiện thị Boot
     I2COLED.begin(OLED_SDA, OLED_SCL, 100000); // Khởi tạo I2C1
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -158,8 +166,123 @@ void setup() {
     // Kích hoạt đa nhiệm, đẩy các Task vào các Core tương ứng
     xTaskCreatePinnedToCore(TaskSensorCode, "TaskSensor", 10000, NULL, 1, &TaskSensorHandle, 0);
     xTaskCreatePinnedToCore(TaskFSMCode, "TaskFSM", 10000, NULL, 2, &TaskFSMHandle, 1);
+    xTaskCreatePinnedToCore(TelemetryRxTask, "TelemetryRx", 4096, NULL, 1, NULL, 1);
 }
 
+void TelemetryRxTask(void *pvParameters) {
+    uint8_t rx_buffer[256];
+    uint8_t decode_buffer[256];
+    size_t rx_idx = 0;
+    bool in_packet = false;
+
+    while (1) {
+        while (Serial.available()) {
+            uint8_t c = Serial.read();
+            if (!in_packet && c == 0x00) {
+                in_packet = true;
+                rx_idx = 0;
+            } else if (in_packet && c == 0x00) {
+                // Kết thúc gói
+                if (rx_idx > 0) {
+                    int dec_len = cobs_decode(rx_buffer, rx_idx, decode_buffer);
+                    if (dec_len >= 3) { // type + length + crc
+                        uint8_t type = decode_buffer[0];
+                        uint16_t len = decode_buffer[1] | (decode_buffer[2] << 8);
+                        if (dec_len >= 3 + len + 2) {
+                            uint16_t recv_crc = decode_buffer[3+len] | (decode_buffer[3+len+1] << 8);
+                            uint16_t calc_crc = crc16_ccitt(decode_buffer, 3+len);
+                            if (recv_crc == calc_crc) {
+                                if (type == 0x02) { // PARAM_SET
+                                    // payload: param_id (2 byte) + value (4 byte float)
+                                    if (len >= 6) {
+                                        uint16_t param_id = decode_buffer[3] | (decode_buffer[4] << 8);
+                                        float value;
+                                        memcpy(&value, &decode_buffer[5], 4);
+                                        updateParameter(param_id, value);
+                                    }
+                                } else if (type == 0x03) { // PARAM_GET
+                                    sendAllParameters();  // gói PARAM_RESP
+                                }
+                            }
+                        }
+                    }
+                }
+                in_packet = false;
+            } else if (in_packet && rx_idx < sizeof(rx_buffer)) {
+                rx_buffer[rx_idx++] = c;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+}
+void updateParameter(uint16_t param_id, float value) {
+    if (xSemaphoreTake(paramMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+        switch (param_id) {
+            case 1:  WARN_DIST = (uint16_t)value; break;
+            case 2:  STRIKE_DIST = (uint16_t)value; break;
+            case 3:  PWM_MAX = (uint8_t)value; break;
+            case 4:  PWM_STRIKE_HOLD = (uint8_t)value; break;
+            case 5:  PWM_HIGH = (uint8_t)value; break;
+            case 6:  PWM_MED = (uint8_t)value; break;
+            case 7:  PWM_LOW = (uint8_t)value; break;
+            case 8:  V_MAX_60 = value; break;
+            case 9:  OMEGA_60 = value; break;
+            case 10: KP_STEERING = value; break;
+            case 11: FEINT_CHANCE = (uint8_t)value; break;
+            case 12: ATK_LOCK_TIME = (uint32_t)value; break;
+            default: break;
+        }
+        xSemaphoreGive(paramMutex);
+        DEBUG_PRINTF(">>> PARAM ALTERED: ID %d -> %.2f\n", param_id, value);
+    }
+}
+void sendAllParameters() {
+    uint8_t payload[12 * 6]; // 12 tham số, mỗi tham số gồm 2 byte ID + 4 byte Float
+    int idx = 0;
+
+    // Biểu thức Lambda hỗ trợ đóng gói nhanh dữ liệu
+    auto packParam = [&](uint16_t id, float val) {
+        payload[idx++] = id & 0xFF;
+        payload[idx++] = (id >> 8) & 0xFF;
+        memcpy(&payload[idx], &val, 4);
+        idx += 4;
+    };
+
+    if (xSemaphoreTake(paramMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        packParam(1,  (float)WARN_DIST);
+        packParam(2,  (float)STRIKE_DIST);
+        packParam(3,  (float)PWM_MAX);
+        packParam(4,  (float)PWM_STRIKE_HOLD);
+        packParam(5,  (float)PWM_HIGH);
+        packParam(6,  (float)PWM_MED);
+        packParam(7,  (float)PWM_LOW);
+        packParam(8,  V_MAX_60);
+        packParam(9,  OMEGA_60);
+        packParam(10, KP_STEERING);
+        packParam(11, (float)FEINT_CHANCE);
+        packParam(12, (float)ATK_LOCK_TIME);
+        xSemaphoreGive(paramMutex);
+    }
+
+    // Đóng gói Frame theo đúng định dạng Python mong đợi (Type 0x04)
+    uint8_t frame[256];
+    frame[0] = 0x04; // PARAM_RESP_TYPE
+    frame[1] = idx & 0xFF;
+    frame[2] = (idx >> 8) & 0xFF;
+    memcpy(frame + 3, payload, idx);
+
+    uint16_t crc = crc16_ccitt(frame, 3 + idx);
+    frame[3 + idx] = crc & 0xFF;
+    frame[3 + idx + 1] = (crc >> 8) & 0xFF;
+
+    uint8_t cobs_buf[256];
+    size_t cobs_len = cobs_encode(frame, 3 + idx + 2, cobs_buf);
+
+    // Xuất luồng nhị phân ra cổng Serial
+    Serial.write(0x00);
+    Serial.write(cobs_buf, cobs_len);
+    Serial.write(0x00);
+}
 void loop() {
     uint32_t current_time = millis();
 
@@ -287,7 +410,19 @@ void loop() {
             needsDisplayUpdate = false;
         }
     }
-
+    // Gửi telemetry 25Hz (chỉ khi DEBUG_LEVEL >=1)
+#if DEBUG_LEVEL >= 1
+    static uint32_t last_telemetry_time = 0;
+    if (current_time - last_telemetry_time >= 40) { // 40ms một lần
+        last_telemetry_time = current_time;
+        
+        // Đọc snapshot an toàn từ Double-Buffer thông qua cơ chế Lock-Free có sẵn của cậu
+        SystemData telemetrySnap = sysBuffer[read_index.load()];
+        
+        // Đẩy dữ liệu ra Serial sang máy tính
+        send_telemetry(telemetrySnap, currentState);
+    }
+#endif
     // Debug serial mỗi 500ms
 #if DEBUG_LEVEL >= 2
     static uint32_t last_debug_time = 0;

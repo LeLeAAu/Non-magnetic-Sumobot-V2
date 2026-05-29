@@ -7,6 +7,12 @@
 #include <SparkFunLSM6DS3.h>
 #include <math.h>    
 #include <atomic>
+#include "COBS.h"
+#include "crc16.h"
+
+
+static uint8_t tx_buffer[256];
+static uint8_t cobs_buffer[256];
 
 // HÀM PHỤ TRỢ
 // Chuyển đổi PWM sang vận tốc tuyến tính xấp xỉ mm/s
@@ -291,3 +297,62 @@ void TaskSensorCode(void * pvParameters) {
     }
 }
 
+
+// Định nghĩa gói telemetry
+struct __attribute__((packed)) TelemetryPacket {
+    uint32_t timestamp;
+    uint16_t dist[5];
+    uint16_t line[4];
+    float enemy_angle;
+    float v_e;
+    float v_0;
+    float pitch;
+    float roll;
+    uint8_t state;
+    uint8_t flags;
+    uint8_t misc[2]; // padding
+};
+
+// Hàm gửi telemetry qua Serial
+void send_telemetry(const SystemData &data, RobotState state) {
+    TelemetryPacket pkt;
+    // Khởi tạo struct và ép toàn bộ các byte (kể cả padding) về 0
+    memset(&pkt, 0, sizeof(TelemetryPacket));
+    pkt.timestamp = data.timestamp;
+    memcpy(pkt.dist, data.dist, sizeof(pkt.dist));
+    memcpy(pkt.line, data.line, sizeof(pkt.line));
+    pkt.enemy_angle = data.enemy_angle;
+    pkt.v_e = data.v_e;
+    pkt.v_0 = data.v_0;
+    pkt.pitch = data.pitch;
+    pkt.roll = data.roll;
+    pkt.state = (uint8_t)state;
+
+    pkt.flags = (data.closingFast ? 0x01 : 0) |
+                (data.flkPossible ? 0x02 : 0) |
+                (data.fallOut ? 0x04 : 0) |
+                (data.liftDetected ? 0x08 : 0) |
+                (data.impactDetected ? 0x10 : 0) |
+                (data.sideDanger ? 0x20 : 0) |
+                (data.edgeDetect ? 0x40 : 0) |
+                (data.isTargetLost ? 0x80 : 0);
+    // misc có thể bỏ qua hoặc fill 0
+
+    uint8_t *payload = (uint8_t*)&pkt;
+    uint16_t payload_len = sizeof(TelemetryPacket);
+
+    uint8_t frame[256];
+    frame[0] = 0x01; // type
+    frame[1] = payload_len & 0xFF;
+    frame[2] = (payload_len >> 8) & 0xFF;
+    memcpy(frame + 3, payload, payload_len);
+    uint16_t crc = crc16_ccitt(frame, 3 + payload_len);
+    frame[3 + payload_len] = crc & 0xFF;
+    frame[3 + payload_len + 1] = (crc >> 8) & 0xFF;
+
+    size_t frame_len = 3 + payload_len + 2;
+    size_t cobs_len = cobs_encode(frame, frame_len, cobs_buffer);
+    Serial.write(0x00);
+    Serial.write(cobs_buffer, cobs_len);
+    Serial.write(0x00);
+}
