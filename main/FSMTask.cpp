@@ -32,7 +32,7 @@ void TaskFSMCode(void * pvParameters) {
 
         // Giám sát watchdog: Kiểm tra xem dữ liệu có bị freeze không
         if (fsm_current_time - localData.timestamp > 150) { 
-            Serial.println(">>> CRITICAL ERROR: SENSOR CORE FROZEN! <<<");
+            DEBUG_PRINTLN(">>> CRITICAL ERROR: SENSOR CORE FROZEN! <<<");
 
             // Xử lý khẩn cấp khi bị mù thông tin (ví dụ: Phanh cứng hoặc Lùi thủ thế)
             if (currentState != STATE_IDLE && currentState != STATE_DEF_LAST_STAND) {
@@ -53,21 +53,21 @@ void TaskFSMCode(void * pvParameters) {
             if (localData.fallOut) {
                 if (currentState != STATE_DEF_LAST_STAND) {
                     enterState(STATE_DEF_LAST_STAND);
-                    Serial.println(">>> GLOBAL SAFETY: FALL OUT -> LAST STAND!");
+                    DEBUG_PRINTLN(">>> GLOBAL SAFETY: FALL OUT -> LAST STAND!");
                 }
             }
             // ƯU TIÊN 2: Bị xới gầm / nhấc bổng
             else if (localData.liftedFront || localData.liftedRear || localData.beingLifted) {
                 if (currentState != STATE_DEF_ANTI_LIFT) {
                     enterState(STATE_DEF_ANTI_LIFT);
-                    Serial.println(">>> GLOBAL SAFETY: BEING LIFTED -> ANTI_LIFT!");
+                    DEBUG_PRINTLN(">>> GLOBAL SAFETY: BEING LIFTED -> ANTI_LIFT!");
                 }
             }
             // ƯU TIÊN 3: Gặp Edge
             else if (localData.edgeDetect) {
                 if (currentState != STATE_DEF_EDGE_AVOID && currentState != STATE_DEF_LAST_STAND) {
                     enterState(STATE_DEF_EDGE_AVOID);
-                    Serial.println(">>> GLOBAL SAFETY: EDGE DETECTED -> AVOID!");
+                    DEBUG_PRINTLN(">>> GLOBAL SAFETY: EDGE DETECTED -> AVOID!");
                 }
             }
             // ƯU TIÊN 4: Bị đâm mạnh
@@ -85,13 +85,13 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (blind_hit) {
                     enterState(STATE_DEF_REAR_GUARD); // Đâm từ điểm mù -> Thủ sau
-                    Serial.println(">>> GLOBAL SAFETY: BLIND IMPACT -> REAR GUARD!");
+                    DEBUG_PRINTLN(">>> GLOBAL SAFETY: BLIND IMPACT -> REAR GUARD!");
                 } else if (side_hit && currentState == STATE_SEARCH_ENEMY) {
                     enterState(STATE_DEF_SIDE_GUARD); // Đâm ngang hông -> Thủ sườn
-                    Serial.println(">>> GLOBAL SAFETY: SIDE IMPACT -> SIDE GUARD!");
+                    DEBUG_PRINTLN(">>> GLOBAL SAFETY: SIDE IMPACT -> SIDE GUARD!");
                 } else {
                     enterState(STATE_DEF_ANTI_PUSH); // Mặc định: giằng co chính diện
-                    Serial.println(">>> GLOBAL SAFETY: FRONT IMPACT -> ANTI_PUSH!");
+                    DEBUG_PRINTLN(">>> GLOBAL SAFETY: FRONT IMPACT -> ANTI_PUSH!");
                 }
             }
         }
@@ -111,7 +111,7 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (digitalRead(PIN_TTP223) == HIGH) { // Chạm nút
                     enterState(STATE_INIT_DELAY); // Bắt đầu đếm ngược
-                    Serial.println(">>> START: INIT_DELAY (3 seconds)");
+                    DEBUG_PRINTLN(">>> START: INIT_DELAY (3 seconds)");
                 } 
                 break;
             }
@@ -137,7 +137,7 @@ void TaskFSMCode(void * pvParameters) {
                 if (currentState == STATE_IDLE) {
                     if (digitalRead(PIN_TTP223) == HIGH) {
                         enterState(STATE_INIT_DELAY);
-                        Serial.println(">>> START: INIT_DELAY (3 seconds)");
+                        DEBUG_PRINTLN(">>> START: INIT_DELAY (3 seconds)");
                     }
                 } 
                 else if (currentState == STATE_INIT_DELAY) {
@@ -146,14 +146,14 @@ void TaskFSMCode(void * pvParameters) {
                         
                         if (localData.dist[0] < CONF_ENY) { // Địch trước mặt
                             enterState(STATE_ATK_LOCK); // Lock
-                            Serial.println(">>> DELAY XONG: ĐỊCH NGAY TRƯỚC MẶT -> LOCK!");
+                            DEBUG_PRINTLN(">>> DELAY XONG: ĐỊCH NGAY TRƯỚC MẶT -> LOCK!");
                         } else {
                             enterState(STATE_SEARCH_ENEMY);
                             if (target_angle != 999.0) { // Xoay robot về góc đã ghi nhớ
                                 Serial.print(">>> DELAY XONG: TÌM KIẾM THEO GÓC GHI NHỚ: ");
-                                Serial.println(target_angle);
+                                DEBUG_PRINTLN(target_angle);
                             } else {
-                                Serial.println(">>> DELAY XONG: MÙ HOÀN TOÀN -> VÀO CHẾ ĐỘ QUÉT XOAY ỐC!");
+                                DEBUG_PRINTLN(">>> DELAY XONG: MÙ HOÀN TOÀN -> VÀO CHẾ ĐỘ QUÉT XOAY ỐC!");
                             }
                         }
                     }
@@ -200,10 +200,10 @@ void TaskFSMCode(void * pvParameters) {
                         clean_edge_time = 0;
                         if (localData.dist[0] < WARN_DIST) {
                             enterState(STATE_ATK_STRIKE);
-                            Serial.println(">>> SAFE: EDGE CLEARED -> ĐỊCH Ở TRƯỚC MẶT -> STRIKE!");
+                            DEBUG_PRINTLN(">>> SAFE: EDGE CLEARED -> ĐỊCH Ở TRƯỚC MẶT -> STRIKE!");
                         } else {
                             enterState(STATE_SEARCH_ENEMY);
-                            Serial.println(">>> SAFE: EDGE CLEARED -> SEARCH");
+                            DEBUG_PRINTLN(">>> SAFE: EDGE CLEARED -> SEARCH");
                         }
                     }
                 } else {
@@ -227,7 +227,7 @@ void TaskFSMCode(void * pvParameters) {
                     if (fsm_current_time - stable_time >= 100) {
                         enterState(STATE_REC_RECOVER);
                         stable_time = 0;
-                        Serial.println(">>> LAST STAND SURVIVED -> RECOVERING");
+                        DEBUG_PRINTLN(">>> LAST STAND SURVIVED -> RECOVERING");
                     }
                 } else {
                     stable_time = 0;
@@ -259,13 +259,13 @@ void TaskFSMCode(void * pvParameters) {
                 // ĐIỀU KIỆN THOÁT 1: Xe đã hạ xuống sàn thành công
                 if (!localData.liftedFront && !localData.liftedRear && fabsf(localData.pitch) <= 5.0 && fabsf(localData.roll) <= 5.0) {
                     enterState(STATE_REC_RECOVER);
-                    Serial.println(">>> THOÁT KHỎI GẦM ĐỊCH -> RECOVERING!");
+                    DEBUG_PRINTLN(">>> THOÁT KHỎI GẦM ĐỊCH -> RECOVERING!");
                 }
                 
                 // ĐIỀU KIỆN THOÁT 2 (TIMEOUT)
                 else if (elapsed_time > 1200) {
                     enterState(STATE_DEF_LAST_STAND); // Chuyển sang trạng thái rớt đài
-                    Serial.println(">>> ANTI_LIFT BẾ TẮC -> LAST STAND!");
+                    DEBUG_PRINTLN(">>> ANTI_LIFT BẾ TẮC -> LAST STAND!");
                 }
                 
                 break;
@@ -289,7 +289,7 @@ void TaskFSMCode(void * pvParameters) {
                 } 
                 else {
                     enterState(STATE_REC_RECOVER);
-                    Serial.println(">>> ANTI_PUSH DONE -> RECOVERING");
+                    DEBUG_PRINTLN(">>> ANTI_PUSH DONE -> RECOVERING");
                 }
                 break;
             }
@@ -308,10 +308,10 @@ void TaskFSMCode(void * pvParameters) {
                 else {
                     if (localData.dist[0] < WARN_DIST) {
                         enterState(STATE_ATK_LOCK);
-                        Serial.println(">>> SIDE_GUARD -> ENEMY FRONT -> ATK_LOCK");
+                        DEBUG_PRINTLN(">>> SIDE_GUARD -> ENEMY FRONT -> ATK_LOCK");
                     } else {
                         enterState(STATE_REC_RECOVER);
-                        Serial.println(">>> SIDE_GUARD -> RECOVERING");
+                        DEBUG_PRINTLN(">>> SIDE_GUARD -> RECOVERING");
                     }
                 }
                 break;
@@ -336,10 +336,10 @@ void TaskFSMCode(void * pvParameters) {
                 else {
                     if (localData.flkPossible) {
                         enterState(STATE_ATK_FLANK_REAR);
-                        Serial.println(">>> REAR_GUARD -> TURN TO FLANK REAR");
+                        DEBUG_PRINTLN(">>> REAR_GUARD -> TURN TO FLANK REAR");
                     } else {
                         enterState(STATE_REC_RECOVER);
-                        Serial.println(">>> REAR_GUARD -> RECOVERING");
+                        DEBUG_PRINTLN(">>> REAR_GUARD -> RECOVERING");
                     }
                 }
                 break;
@@ -367,7 +367,7 @@ void TaskFSMCode(void * pvParameters) {
                     state_start_time = fsm_current_time; // Bắt đầu chu kỳ tìm kiếm mới
                     Serial.print(">>> SEARCH TIMEOUT -> REVERSE DIRECTION (Dir: ");
                     Serial.print(search_dir);
-                    Serial.println(")");
+                    DEBUG_PRINTLN(")");
                 }
 
                 // Tìm thấy mục tiêu
@@ -375,16 +375,16 @@ void TaskFSMCode(void * pvParameters) {
                     // Cự ly nguy hiểm -> Bỏ qua ngắm nghía, ATK
                     if (localData.dist[0] <= WARN_DIST) {
                         enterState(STATE_ATK_STRIKE);
-                        Serial.println(">>> SEARCH: ĐỊCH Ở GẦN (< WARN_DIST) -> RUSH LUÔN BỎ QUA LOCK!");
+                        DEBUG_PRINTLN(">>> SEARCH: ĐỊCH Ở GẦN (< WARN_DIST) -> RUSH LUÔN BỎ QUA LOCK!");
                     } else {
                         enterState(STATE_ATK_LOCK);
-                        Serial.println(">>> SEARCH: FOUND IN FRONT (FAR) -> LOCK");
+                        DEBUG_PRINTLN(">>> SEARCH: FOUND IN FRONT (FAR) -> LOCK");
                     }
                 }
                 else if (localData.dist[1] < CONF_ENY || localData.dist[2] < CONF_ENY || 
                          localData.dist[3] < CONF_ENY || localData.dist[4] < CONF_ENY) {
                     enterState(STATE_ATK_FLANK_SIDE);
-                    Serial.println(">>> SEARCH: FOUND AT SIDE -> FLANK");
+                    DEBUG_PRINTLN(">>> SEARCH: FOUND AT SIDE -> FLANK");
                 }
                 break;
             }
@@ -405,18 +405,18 @@ void TaskFSMCode(void * pvParameters) {
                 if (elapsed_time >= 300) {
                     if (localData.dist[0] < WARN_DIST) {
                         enterState(STATE_ATK_LOCK);
-                        Serial.println(">>> RECOVER INT: ENEMY FRONT -> ATK_LOCK");
+                        DEBUG_PRINTLN(">>> RECOVER INT: ENEMY FRONT -> ATK_LOCK");
                     } 
                     else if (localData.dist[1] < WARN_DIST || localData.dist[2] < WARN_DIST || 
                              localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST) {
                         enterState(STATE_ATK_FLANK_SIDE);
-                        Serial.println(">>> RECOVER INT: ENEMY SIDE -> FLANK_SIDE");
+                        DEBUG_PRINTLN(">>> RECOVER INT: ENEMY SIDE -> FLANK_SIDE");
                     }
                 }
 
                 if (elapsed_time >= MAX_RECOVER_TIME) {
                     enterState(STATE_SEARCH_ENEMY);
-                    Serial.println(">>> RECOVER TIMEOUT -> SEARCH");
+                    DEBUG_PRINTLN(">>> RECOVER TIMEOUT -> SEARCH");
                 }
                 break;
             }
@@ -441,7 +441,7 @@ void TaskFSMCode(void * pvParameters) {
                     if (lock_retries >= MAX_LOCK_RETRIES) {
                         enterState(STATE_SEARCH_ENEMY);
                         lock_retries = 0;
-                        Serial.println(">>> LOCK FAILED: LOST TARGET -> SEARCH");
+                        DEBUG_PRINTLN(">>> LOCK FAILED: LOST TARGET -> SEARCH");
                     } else {
                         state_start_time = fsm_current_time; // Reset timer để thử ngắm lại
                     }
@@ -488,17 +488,17 @@ void TaskFSMCode(void * pvParameters) {
                         if (localData.closingFast) {
                             enterState(STATE_ATK_DELAY_RUSH); // Địch đang lao tới nhanh
                             lock_retries = 0;
-                            Serial.println(">>> LOCK SUCCESS -> ENEMY RUSHING -> DELAY RUSH!");
+                            DEBUG_PRINTLN(">>> LOCK SUCCESS -> ENEMY RUSHING -> DELAY RUSH!");
                         } 
                         else {
                             if (localData.dist[0] > DIST_CLOSE && (esp_random() % 100 < FEINT_CHANCE)) {
                                 enterState(STATE_ATK_FEINT);
                                 lock_retries = 0;
-                                Serial.println(">>> LOCK SUCCESS -> TACTICAL FEINT!"); // Địch ở hơi xa -> nhử mồi (25%)
+                                DEBUG_PRINTLN(">>> LOCK SUCCESS -> TACTICAL FEINT!"); // Địch ở hơi xa -> nhử mồi (25%)
                             } else {
                                 enterState(STATE_ATK_STRIKE); // Đâm thẳng mặt
                                 lock_retries = 0; 
-                                Serial.println(">>> LOCK SUCCESS -> DEFAULT STRIKE!");
+                                DEBUG_PRINTLN(">>> LOCK SUCCESS -> DEFAULT STRIKE!");
                             }
                         }
                     }
@@ -508,10 +508,10 @@ void TaskFSMCode(void * pvParameters) {
                 if (elapsed_time > ATK_LOCK_TIME) {
                     if (localData.dist[0] < CONF_ENY) {
                         enterState(STATE_ATK_STRIKE);
-                        Serial.println(">>> LOCK TIMEOUT -> DESPERATE STRIKE");
+                        DEBUG_PRINTLN(">>> LOCK TIMEOUT -> DESPERATE STRIKE");
                     } else {
                         enterState(STATE_SEARCH_ENEMY);
-                        Serial.println(">>> LOCK TIMEOUT -> MẤT DẤU -> SEARCH");
+                        DEBUG_PRINTLN(">>> LOCK TIMEOUT -> MẤT DẤU -> SEARCH");
                     }
                     lock_retries = 0;
                 }
@@ -539,14 +539,14 @@ void TaskFSMCode(void * pvParameters) {
                 if (elapsed_time > IGNORE_ANTI_PUSH) {
                     if (localData.sideDanger == true && localData.impactDetected == true) {
                         enterState(STATE_DEF_ANTI_PUSH); 
-                        Serial.println(">>> STRIKE BLOCKED: ANTI_PUSH TRIGGERED!");
+                        DEBUG_PRINTLN(">>> STRIKE BLOCKED: ANTI_PUSH TRIGGERED!");
                         break; 
                     }
                 }
 
                 if (localData.liftDetected) {
                     enterState(STATE_ATK_LIFT);
-                    Serial.println(">>> STRIKE -> ENEMY LIFTED -> ATK_LIFT (FULL POWER)!"); // Chui được gầm địch thì đẩy hết cỡ
+                    DEBUG_PRINTLN(">>> STRIKE -> ENEMY LIFTED -> ATK_LIFT (FULL POWER)!"); // Chui được gầm địch thì đẩy hết cỡ
                     break;
                 }
 
@@ -555,7 +555,7 @@ void TaskFSMCode(void * pvParameters) {
                 // - Lệch góc quá nhiều: angle > 20 độ
                 if (localData.dist[0] > WARN_DIST || fabsf(localData.enemy_angle) > 20.0) {
                     enterState(STATE_ATK_LOCK); 
-                    Serial.println(">>> STRIKE SLIP/AWAY -> RE-LOCK");
+                    DEBUG_PRINTLN(">>> STRIKE SLIP/AWAY -> RE-LOCK");
                     break;
                 }
 
@@ -565,7 +565,7 @@ void TaskFSMCode(void * pvParameters) {
                 // Giải pháp: Kích hoạt tự hãm của Worm Gear bằng cách phanh cứng 0 PWM.
                 if (elapsed_time > TIMEOUT_MAX) {
                 enterState(STATE_ATK_STALEMATE_BRAKE);
-                Serial.println(">>> STALEMATE TIMEOUT -> WORM GEAR BRAKE (STAND YOUR GROUND)!");
+                DEBUG_PRINTLN(">>> STALEMATE TIMEOUT -> WORM GEAR BRAKE (STAND YOUR GROUND)!");
                 }
 
         break;
@@ -588,17 +588,17 @@ void TaskFSMCode(void * pvParameters) {
                             // Đã húc nhau 5 nhịp (hơn 6 giây) không kết quả -> phá thế
                             stalemate_cycles = 0;
                             enterState(STATE_REC_RECOVER); // Giật lùi nhanh và xoay tìm góc đánh sườn
-                            Serial.println(">>> STALEMATE BROKEN -> FALLBACK TO RECOVER!");
+                            DEBUG_PRINTLN(">>> STALEMATE BROKEN -> FALLBACK TO RECOVER!");
                         } else {
                             // Đánh tiếp
                             enterState(STATE_ATK_STRIKE);
-                            Serial.println(">>> BRAKE DONE -> RE-STRIKE!");
+                            DEBUG_PRINTLN(">>> BRAKE DONE -> RE-STRIKE!");
                         }
                     } else {
                         // Địch bị trượt hoặc lùi lại -> Nhìn lại góc cho chuẩn
                         stalemate_cycles = 0; // Reset bộ đếm
                         enterState(STATE_ATK_LOCK);
-                        Serial.println(">>> BRAKE DONE -> ENEMY SLIPPED -> RE-LOCK");
+                        DEBUG_PRINTLN(">>> BRAKE DONE -> ENEMY SLIPPED -> RE-LOCK");
                     }
                 }
                 break;
@@ -616,15 +616,15 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (localData.impactDetected) {
                     enterState(STATE_ATK_STRIKE);
-                    Serial.println(">>> FLANK_FRONT IMPACT -> GO TO STRIKE");
+                    DEBUG_PRINTLN(">>> FLANK_FRONT IMPACT -> GO TO STRIKE");
                 }
                 else if (fabsf(err_angle) >= 25.0) {
                     enterState(STATE_ATK_FLANK_SIDE);
-                    Serial.println(">>> FLANK_FRONT SLIP -> GO TO FLANK_SIDE");
+                    DEBUG_PRINTLN(">>> FLANK_FRONT SLIP -> GO TO FLANK_SIDE");
                 }
                 else if (localData.dist[0] > CONF_ENY) {
                     enterState(STATE_SEARCH_ENEMY);
-                    Serial.println(">>> FLANK_FRONT LOST TARGET -> SEARCH");
+                    DEBUG_PRINTLN(">>> FLANK_FRONT LOST TARGET -> SEARCH");
                 }
                 break;
             }
@@ -667,17 +667,17 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (localData.impactDetected) {
                     enterState(STATE_ATK_STRIKE);
-                    Serial.println(">>> FLANK_SIDE IMPACT -> GO TO STRIKE");
+                    DEBUG_PRINTLN(">>> FLANK_SIDE IMPACT -> GO TO STRIKE");
                 }
                 else if (localData.dist[0] < CONF_ENY) {
                     // Đang tạt sườn mà địch lọt vào mũi xe ở cự ly nguy hiểm -> ATK
                     if (localData.dist[0] <= WARN_DIST) { 
                         enterState(STATE_ATK_STRIKE);
-                        Serial.println(">>> FLANK_SIDE: TARGET IN FRONT (< WARN_DIST) -> RUSH TO STRIKE!");
+                        DEBUG_PRINTLN(">>> FLANK_SIDE: TARGET IN FRONT (< WARN_DIST) -> RUSH TO STRIKE!");
                     } else {
                         // Địch lọt vào mũi nhưng còn ở xa -> SLOW-DOWN 2 LOCK
                         enterState(STATE_ATK_LOCK);
-                        Serial.println(">>> FLANK_SIDE: TARGET FAR IN FRONT -> RE-LOCK");
+                        DEBUG_PRINTLN(">>> FLANK_SIDE: TARGET FAR IN FRONT -> RE-LOCK");
                     }
                 }
                 else if (localData.dist[0] > CONF_ENY && localData.dist[1] > CONF_ENY && 
@@ -686,7 +686,7 @@ void TaskFSMCode(void * pvParameters) {
                     
                     if (fsm_current_time - state_start_time > 800) { 
                         enterState(STATE_REC_RECOVER);
-                        Serial.println(">>> FLANK_SIDE FAILED -> RECOVERING");
+                        DEBUG_PRINTLN(">>> FLANK_SIDE FAILED -> RECOVERING");
                     }
                 }
                 break;
@@ -706,11 +706,11 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (localData.impactDetected) {
                     enterState(STATE_ATK_STRIKE);
-                    Serial.println(">>> FLANK_REAR IMPACT -> GO TO STRIKE");
+                    DEBUG_PRINTLN(">>> FLANK_REAR IMPACT -> GO TO STRIKE");
                 }
                 else if (localData.dist[0] < CONF_ENY) {
                     enterState(STATE_ATK_LOCK); 
-                    Serial.println(">>> FLANK_REAR: TARGET IN FRONT -> GO TO ATK_LOCK");
+                    DEBUG_PRINTLN(">>> FLANK_REAR: TARGET IN FRONT -> GO TO ATK_LOCK");
                 }
                 else if (localData.dist[0] > CONF_ENY && localData.dist[1] > CONF_ENY && 
                          localData.dist[2] > CONF_ENY && localData.dist[3] > CONF_ENY && 
@@ -718,7 +718,7 @@ void TaskFSMCode(void * pvParameters) {
                     
                     if (fsm_current_time - state_start_time > 600) {
                         enterState(STATE_SEARCH_ENEMY);
-                        Serial.println(">>> FLANK_REAR: LOST TARGET -> SEARCH");
+                        DEBUG_PRINTLN(">>> FLANK_REAR: LOST TARGET -> SEARCH");
                     }
                 }
                 break;
@@ -750,15 +750,15 @@ void TaskFSMCode(void * pvParameters) {
 
                 if (elapsed_time >= 450) { 
                     enterState(STATE_ATK_FLANK_SIDE); 
-                    Serial.println(">>> FEINT COMPLETE -> GO TO FLANK_SIDE");
+                    DEBUG_PRINTLN(">>> FEINT COMPLETE -> GO TO FLANK_SIDE");
                 }
                 if (localData.impactDetected) {
                     enterState(STATE_ATK_STRIKE);
-                    Serial.println(">>> FEINT IMPACT EARLY -> STRIKE");
+                    DEBUG_PRINTLN(">>> FEINT IMPACT EARLY -> STRIKE");
                 }
                 if (localData.dist[0] > CONF_ENY && elapsed_time > 100) {
                     enterState(STATE_SEARCH_ENEMY);
-                    Serial.println(">>> FEINT MISSED -> SEARCH");
+                    DEBUG_PRINTLN(">>> FEINT MISSED -> SEARCH");
                 }
                 break;
             }
@@ -775,22 +775,22 @@ void TaskFSMCode(void * pvParameters) {
                 // Ngay khi địch lọt vào 150, dậm kịch ga để bẩy
                 if (localData.dist[0] <= 150) {
                     enterState(STATE_ATK_STRIKE); 
-                    Serial.println(">>> COUNTER RUSH: ĐỊCH VÀO TẦM (<150mm) -> BUNG MAX GA (UPPERCUT)!");
+                    DEBUG_PRINTLN(">>> COUNTER RUSH: ĐỊCH VÀO TẦM (<150mm) -> BUNG MAX GA (UPPERCUT)!");
                 }
                 // Nếu địch lươn lẹo bẻ lái sang hướng khác (lệch góc > 20 độ) -> Hủy rình, ngắm lại
                 else if (fabsf(localData.enemy_angle) > 20.0) {
                     enterState(STATE_ATK_LOCK); 
-                    Serial.println(">>> COUNTER CANCELLED: ĐỊCH LÁCH GÓC -> RE-LOCK");
+                    DEBUG_PRINTLN(">>> COUNTER CANCELLED: ĐỊCH LÁCH GÓC -> RE-LOCK");
                 }
                 // Nếu địch đột ngột nhát gan phanh lại hoặc đi chậm (v_e <= 100) -> Bỏ rình, chủ động lao lên atk
                 else if (localData.v_e <= 100.0) { 
                     enterState(STATE_ATK_STRIKE); 
-                    Serial.println(">>> COUNTER CANCELLED: ĐỊCH CHẬM LẠI -> CHỦ ĐỘNG STRIKE");
+                    DEBUG_PRINTLN(">>> COUNTER CANCELLED: ĐỊCH CHẬM LẠI -> CHỦ ĐỘNG STRIKE");
                 }
                 // Bế tắc thời gian (Đề phòng 2 xe gằm ghè nhau ngoài tầm 150mm quá lâu)
                 else if (elapsed_time > 600) {
                     enterState(STATE_ATK_STRIKE);
-                    Serial.println(">>> COUNTER TIMEOUT -> ÉP XUNG ĐÁNH BỪA");
+                    DEBUG_PRINTLN(">>> COUNTER TIMEOUT -> ÉP XUNG ĐÁNH BỪA");
                 }
                 
                 break;

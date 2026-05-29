@@ -10,8 +10,6 @@
 
 // Problems
 /*
-
-- Debug Serial mỗi 500ms in ~20 dòng -> - Chuyển sang chế độ conditional (#define DEBUG_LEVEL 0/1/2) hoặc dùng telemetry binary (COBS/Protobuf) giảm overhead UART
 - Chỉ halt lúc boot nếu lỗi sensor, không giám sát runtime
 - Đòn giả FEINT_CHANCE = 25 random thuần túy -> Chuyển thành trigger có điều kiện: sau 2 lần ATK_STRIKE thất bại (v_e < 50mm/s), hoặc khi isTargetLost < 200ms
 - ATK_LOCK_TIME = 500 cố định -> Scale theo dist[0]: lock_time = map(dist[0], 200, 1500, 200, 700) để ngắm chính xác hơn ở cự ly khác nhau
@@ -32,7 +30,7 @@
     if (tempData.flkPossible && fabsf(err_angle) > ANGLE_TIGHT) {
         enterState(STATE_ATK_FLANK_SIDE);
         break;
-}
+    }
 
 */
 
@@ -83,7 +81,7 @@ void setup() {
     // Khởi tạo OLED sớm để hiện thị Boot
     I2COLED.begin(OLED_SDA, OLED_SCL, 100000); // Khởi tạo I2C1
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        Serial.println(F("OLED fail"));
+        DEBUG_PRINTLN(F("OLED fail"));
     } else {
         showLoading(); // Animation khởi động
         display.clearDisplay();
@@ -113,7 +111,7 @@ void setup() {
 
     // Khởi tạo IMU
     if (myIMU.begin() != 0) {
-        Serial.println("IMU Error!");
+        DEBUG_PRINTLN("IMU Error!");
         hardwareError = true;
     }
 
@@ -129,7 +127,7 @@ void setup() {
         delay(10);
         sensorsToF[i].setTimeout(50);
         if (!sensorsToF[i].init()) {
-            Serial.print("Lỗi khởi tạo VL53L1X số "); Serial.println(i);
+            Serial.print("Lỗi khởi tạo VL53L1X số "); DEBUG_PRINTLN(i);
             hardwareError = true;
         } else {
             sensorsToF[i].setAddress(VLX_ADDRESSES[i]); 
@@ -148,14 +146,14 @@ void setup() {
         display.print("X_X");
         display.display();
         
-        Serial.println(">>> HARDWARE HALT: SENSOR FAILED! BOOT ABORTED. <<<");
+        DEBUG_PRINTLN(">>> HARDWARE HALT: SENSOR FAILED! BOOT ABORTED. <<<");
         // Khóa cứng hệ thống ở đây, nháy LED hoặc chờ kỹ sư can thiệp
         while(true) {
             delay(100);
         }
     }
 
-    Serial.println("Init phan cung xong!");
+    DEBUG_PRINTLN("Init phan cung xong!");
 
     // Kích hoạt đa nhiệm, đẩy các Task vào các Core tương ứng
     xTaskCreatePinnedToCore(TaskSensorCode, "TaskSensor", 10000, NULL, 1, &TaskSensorHandle, 0);
@@ -291,6 +289,7 @@ void loop() {
     }
 
     // Debug serial mỗi 500ms
+#if DEBUG_LEVEL >= 2
     static uint32_t last_debug_time = 0;
     if (current_time - last_debug_time >= 500) { 
         last_debug_time = current_time;
@@ -298,14 +297,14 @@ void loop() {
         // Lấy snapshot an toàn từ double buffer
         SystemData snap = sysBuffer[read_index.load()];
         
-        Serial.println("================================================================");
+        DEBUG_PRINTLN("================================================================");
         
         Serial.print("[FSM] STATE: ");
         Serial.print(getStateName(currentState));
         Serial.print(" | TimeInState: ");
         Serial.print(millis() - state_start_time);
         Serial.print(" ms | PWM Output: ");
-        Serial.println(snap.current_PWM);   // snap có sẵn current_PWM
+        DEBUG_PRINTLN(snap.current_PWM);   // snap có sẵn current_PWM
 
         Serial.print("[ToF] Dist: ");
         for(int i=0; i<5; i++) { 
@@ -313,12 +312,12 @@ void loop() {
         }
         Serial.print(" | Target: ");
         if (snap.isTargetLost) {
-            Serial.println("LOST");
+            DEBUG_PRINTLN("LOST");
         } else {
             Serial.print(snap.enemy_angle, 1);
             Serial.print(" deg | v_e: ");
             Serial.print(snap.v_e, 1);
-            Serial.println(" mm/s");
+            DEBUG_PRINTLN(" mm/s");
         }
 
         Serial.print("[TCRT] Line: ");
@@ -326,7 +325,7 @@ void loop() {
             Serial.print(snap.line[i]); Serial.print(" "); 
         }
         Serial.print("| Bụng: ");
-        Serial.println(analogRead(PIN_TCRT_DETECT));
+        DEBUG_PRINTLN(analogRead(PIN_TCRT_DETECT));
 
         Serial.print("[IMU] P: ");
         Serial.print(snap.pitch, 1);
@@ -349,8 +348,9 @@ void loop() {
             if(snap.sideDanger) Serial.print("SIDE_DANGER! ");
             if(snap.flkPossible) Serial.print("FLANK_READY ");
         }
-        Serial.println("\n");
+        DEBUG_PRINTLN("\n");
     }
+#endif
 
     vTaskDelay(pdMS_TO_TICKS(50));
 }

@@ -9,6 +9,24 @@
 #include <Adafruit_SSD1306.h>   
 #include <atomic> 
 
+// DEBUG CONFIGURATION 
+// 0: SILENT MODE - Dành cho thi đấu thực tế (Tắt toàn bộ Serial, tối ưu hiệu năng 100%)
+// 1: EVENT MODE - Chỉ in các sự kiện quan trọng (Chuyển State, Lỗi phần cứng ngắt hệ thống)
+// 2: VERBOSE MODE - In chi tiết tất cả thông số sensor, kinematics mỗi 500ms (Dùng khi test tại xưởng)
+#define DEBUG_LEVEL 2
+
+// Cấu hình Macro
+#if DEBUG_LEVEL > 0
+    #define DEBUG_PRINT(x) Serial.print(x)
+    #define DEBUG_PRINTLN(x) Serial.println(x)
+    #define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+    #define DEBUG_PRINT(x)
+    #define DEBUG_PRINTLN(x)
+    #define DEBUG_PRINTF(...)
+#endif
+
+
 // Chân kết nối ESP32
 // Giao tiếp I2C cho ToF và IMU
 #define I2C_SDA 26
