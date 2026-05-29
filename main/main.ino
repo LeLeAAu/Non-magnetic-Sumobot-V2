@@ -11,7 +11,7 @@
 // Problems
 /*
 
-- chỉ kiểm tra myIMU.begin() != 0 một lần duy nhất ở setup(), khiến IMU có thể bị treo nếu va đập mạnh ->  thêm một biến last_imu_update. Nếu current_time - last_imu_update > 200ms, hãy gọi myIMU.begin() lại để khởi tạo lại
+
 */
 
 // Todo list (dùng cho tất cả các file kể cả file main.ino này)

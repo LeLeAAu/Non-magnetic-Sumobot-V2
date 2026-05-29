@@ -214,6 +214,27 @@ void TaskSensorCode(void * pvParameters) {
         tempData.accelY = myIMU.readFloatAccelY();
         tempData.accelZ = -myIMU.readFloatAccelZ();
         
+        if (tempData.accelX != 0.0f || tempData.accelY != 0.0f || tempData.accelZ != 0.0f) {
+            last_imu_time = current_time;
+        }
+
+        // Nếu quá 200ms không có tín hiệu sống -> Ép khởi tạo lại
+        if (current_time - last_imu_time > 200) {
+            DEBUG_PRINTLN(">>> SENSOR HEALTH: IMU TIMEOUT/HUNG! Đang khởi tạo lại...");
+            
+            // Thử gọi lại begin(). Lưu ý: hàm này của thư viện SparkFun trả về 0 nếu thành công
+            if (myIMU.begin() == 0) {
+                DEBUG_PRINTLN(">>> IMU Revived thành công!");
+                last_imu_time = current_time; // Gia hạn mạng sống để không bị loop khởi tạo
+            } else {
+                DEBUG_PRINTLN(">>> IMU Re-init THẤT BẠI!");
+                // Ép giá trị gia tốc về 0 để FSM biết cảm biến đang mù tạm thời
+                tempData.accelX = 0.0f;
+                tempData.accelY = 0.0f;
+                tempData.accelZ = 0.0f;
+            }
+        }
+
         // Tính góc nghiêng Euler từ Vector gia tốc trọng trường G
         tempData.pitch = atan2(-tempData.accelX, sqrt(tempData.accelY * tempData.accelY + tempData.accelZ * tempData.accelZ)) * 180.0 / M_PI;
         tempData.roll  = atan2(tempData.accelY, tempData.accelZ) * 180.0 / M_PI;
@@ -329,13 +350,10 @@ void TaskSensorCode(void * pvParameters) {
             }
 
             // Kiểm tra IMU Disconnect
-            // Gia tốc kế không bao giờ trả về 0.0 tuyệt đối ở cả 3 trục do luôn có trọng lực G và nhiễu vi cơ (MEMS noise).
-            // Nếu cả 3 trục = 0.0 phẳng lì, nghĩa là bus I2C đã rớt hoặc IC treo.
             if (tempData.accelX == 0.0f && tempData.accelY == 0.0f && tempData.accelZ == 0.0f) {
                 is_error_now = true;
-                DEBUG_PRINTLN(">>> SENSOR HEALTH: IMU DEAD/DISCONNECTED!");
-                // Gọi myIMU.begin() ở đây rất rủi ro vì nếu I2C treo phần cứng, nó sẽ block toàn bộ Core 0.
-                // Tạm thời chỉ ghi nhận lỗi để FSM đưa xe vào trạng thái an toàn.
+                DEBUG_PRINTLN(">>> SENSOR HEALTH: IMU DEAD/DISCONNECTED! (Health Check)");
+                // Ở đây chỉ ghi nhận lỗi để nếu > 3 lần (3s), FSM sẽ đưa xe vào STATE_DEF_LAST_STAND.
             }
 
             // Kiểm tra TCRT Stuck (Kẹt ADC)
