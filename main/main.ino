@@ -10,7 +10,6 @@
 
 // Problems
 /*
-- Chỉ halt lúc boot nếu lỗi sensor, không giám sát runtime
 - Đòn giả FEINT_CHANCE = 25 random thuần túy -> Chuyển thành trigger có điều kiện: sau 2 lần ATK_STRIKE thất bại (v_e < 50mm/s), hoặc khi isTargetLost < 200ms
 - ATK_LOCK_TIME = 500 cố định -> Scale theo dist[0]: lock_time = map(dist[0], 200, 1500, 200, 700) để ngắm chính xác hơn ở cự ly khác nhau
 - biến last_tof_update nhưng chỉ dùng để set tempData.dist[i] = 8190; khi timeout. Tuyệt vời. Nhưng nếu ToF bị treo ở mức thấp hơn, nó vẫn có thể gây ra dữ liệu sai. -> Trong SensorTask, nếu current_time - last_tof_update[i] > 1000 (1 giây không data), hãy thực hiện hard reset cảm biến đó bằng cách kéo chân XSHUT xuống LOW trong 50ms rồi lên HIGH, và gọi lại init() cho nó.
@@ -19,8 +18,7 @@
 
 // Todo list (dùng cho tất cả các file kể cả file main.ino này)
 /*
-- Thêm telemetry binary (COBS/Protobuf) 
-- Thêm checkSensorHealth() mỗi 1s: timeout ToF, IMU disconnect, TCRT stuck. Nếu lỗi >3 lần → STATE_DEF_LAST_STAND
+
 - Thêm một trạng thái tấn công mới: STATE_ATK_ANVIL_BREAKER
     + Kích hoạt: Khi STATE_ATK_LOCK thất bại sau 2 lần lock_retries và localData.v_e (vận tốc đối thủ) là rất nhỏ (ví dụ < 50mm/s). Điều này có nghĩa đối thủ đang "đứng yên" hoặc "bám sàn" như Anvil.
     + Hành vi
@@ -166,7 +164,9 @@ void setup() {
     // Kích hoạt đa nhiệm, đẩy các Task vào các Core tương ứng
     xTaskCreatePinnedToCore(TaskSensorCode, "TaskSensor", 10000, NULL, 1, &TaskSensorHandle, 0);
     xTaskCreatePinnedToCore(TaskFSMCode, "TaskFSM", 10000, NULL, 2, &TaskFSMHandle, 1);
+#if DEBUG_LEVEL > 0
     xTaskCreatePinnedToCore(TelemetryRxTask, "TelemetryRx", 4096, NULL, 1, NULL, 1);
+#endif
 }
 
 void TelemetryRxTask(void *pvParameters) {

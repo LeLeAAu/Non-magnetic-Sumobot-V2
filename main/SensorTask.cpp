@@ -48,6 +48,9 @@ void TaskSensorCode(void * pvParameters) {
     static uint8_t spike_count[5] = {0, 0, 0, 0, 0};
     static bool condition_flank_met = false;
     static uint32_t last_kinematic_time = 0;
+    uint32_t last_health_check = millis();
+    uint8_t sensor_error_count = 0;
+    uint16_t last_tcrt_vals[5] = {0, 0, 0, 0, 0};
 
     // Mảng lưu thời gian cuối cùng ToF trả dữ liệu
     static uint32_t last_tof_update[5] = {0, 0, 0, 0, 0};
@@ -291,6 +294,75 @@ void TaskSensorCode(void * pvParameters) {
         // Nếu phát hiện các event nguy hiểm -> không đợi FSM ở Core 1 tự quay lại loop -> Core 0 phát tín hiệu TaskNotify vào thẳng FSM ép nó wake up xử lí ngay trong 0ms
         if (tempData.edgeDetect || tempData.fallOut || tempData.beingLifted || tempData.impactDetected) {
             if (TaskFSMHandle != NULL) xTaskNotifyGive(TaskFSMHandle);
+        }
+
+        if (current_time - last_health_check >= 1000) {
+            bool is_error_now = false;
+
+            // Kiểm tra ToF Timeout & Hard Reset
+            for (int i = 0; i < 5; i++) {
+                // last_tof_update[i] đã được khai báo sẵn trong code cũ của bạn
+                if (current_time - last_tof_update[i] > 1000) {
+                    is_error_now = true;
+                    DEBUG_PRINTF(">>> SENSOR HEALTH: ToF %d TIMEOUT! Hard Resetting...\n", i);
+                    
+                    // Ép reset cứng bằng chân XSHUT
+                    digitalWrite(XSHUT_PINS[i], LOW);
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                    digitalWrite(XSHUT_PINS[i], HIGH);
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                    
+                    // Khởi tạo lại
+                    sensorsToF[i].init();
+                    sensorsToF[i].setAddress(VLX_ADDRESSES[i]);
+                    sensorsToF[i].setDistanceMode(VL53L1X::Long);
+                    sensorsToF[i].setMeasurementTimingBudget(33000);
+                    sensorsToF[i].startContinuous(34);
+                    
+                    last_tof_update[i] = current_time; // Cho nó thêm cơ hội sống 1s nữa
+                }
+            }
+
+            // Kiểm tra IMU Disconnect
+            // Gia tốc kế không bao giờ trả về 0.0 tuyệt đối ở cả 3 trục do luôn có trọng lực G và nhiễu vi cơ (MEMS noise).
+            // Nếu cả 3 trục = 0.0 phẳng lì, nghĩa là bus I2C đã rớt hoặc IC treo.
+            if (tempData.accelX == 0.0f && tempData.accelY == 0.0f && tempData.accelZ == 0.0f) {
+                is_error_now = true;
+                DEBUG_PRINTLN(">>> SENSOR HEALTH: IMU DEAD/DISCONNECTED!");
+                // Gọi myIMU.begin() ở đây rất rủi ro vì nếu I2C treo phần cứng, nó sẽ block toàn bộ Core 0.
+                // Tạm thời chỉ ghi nhận lỗi để FSM đưa xe vào trạng thái an toàn.
+            }
+
+            // Kiểm tra TCRT Stuck (Kẹt ADC)
+            // ADC của ESP32 cực kỳ nhiễu. Nếu 5 chân đọc analog trả về MỘT GIÁ TRỊ Y HỆT KHÔNG ĐỔI trong suốt 1s,
+            // 100% là ADC đã bị kẹt hoặc đứt dây nguồn (kẹt ở 0 hoặc 4095).
+            if (tempData.line[0] == last_tcrt_vals[0] && tempData.line[1] == last_tcrt_vals[1] &&
+                tempData.line[2] == last_tcrt_vals[2] && tempData.line[3] == last_tcrt_vals[3] &&
+                tcrt_detect_val == last_tcrt_vals[4]) {
+                is_error_now = true;
+                DEBUG_PRINTLN(">>> SENSOR HEALTH: TCRT ADC STUCK!");
+            }
+            
+            // Cập nhật mẫu ADC để đối chiếu chu kỳ sau
+            last_tcrt_vals[0] = tempData.line[0];
+            last_tcrt_vals[1] = tempData.line[1];
+            last_tcrt_vals[2] = tempData.line[2];
+            last_tcrt_vals[3] = tempData.line[3];
+            last_tcrt_vals[4] = tcrt_detect_val;
+
+            // Quyết định sinh tử
+            if (is_error_now) {
+                sensor_error_count++;
+                if (sensor_error_count >= 3) { // Nếu lỗi > 3 lần (3 giây liên tiếp liệt)
+                    tempData.hardwareFailure = true;
+                    if (TaskFSMHandle != NULL) xTaskNotifyGive(TaskFSMHandle); // Đánh thức FSM ngay lập tức
+                }
+            } else {
+                sensor_error_count = 0; 
+                tempData.hardwareFailure = false;
+            }
+
+            last_health_check = current_time;
         }
         // Trả lại tài nguyên CPU
         vTaskDelay(5 / portTICK_PERIOD_MS);

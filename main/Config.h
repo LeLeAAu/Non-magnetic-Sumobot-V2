@@ -14,7 +14,7 @@
 // 0: SILENT MODE - Dành cho thi đấu thực tế (Tắt toàn bộ Serial, tối ưu hiệu năng 100%)
 // 1: EVENT MODE - Chỉ in các sự kiện quan trọng (Chuyển State, Lỗi phần cứng ngắt hệ thống)
 // 2: VERBOSE MODE - In chi tiết tất cả thông số sensor, kinematics mỗi 500ms (Dùng khi test tại xưởng)
-#define DEBUG_LEVEL 2
+#define DEBUG_LEVEL 0
 
 // Cấu hình Macro
 #if DEBUG_LEVEL > 0
@@ -178,6 +178,7 @@ struct SystemData {
     bool liftedRear = false; // Bị nâng đuôi
     bool beingLifted = false; // Đang bị đối thủ nâng
     uint32_t timestamp = 0; // Đánh dấu thời gian dữ liệu xuất xưởng
+    bool hardwareFailure = false; // Báo cáo cảm biến đã chết lâm sàng > 3 lần
 };
 
 // Khai báo biến toàn cục

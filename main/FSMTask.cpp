@@ -49,6 +49,21 @@ void TaskFSMCode(void * pvParameters) {
 
         if (currentState != STATE_IDLE && currentState != STATE_INIT_DELAY) {
 
+            // ƯU TIÊN 0: Cảm biến chết lâm sàng (> 3 lần)
+            if (localData.hardwareFailure) {
+                if (currentState != STATE_DEF_LAST_STAND) {
+                    enterState(STATE_DEF_LAST_STAND);
+                    DEBUG_PRINTLN(">>> CRITICAL ERROR: SENSORS DEAD -> HALTING/LAST STAND! <<<");
+                }
+                
+                // GHI ĐÈ LỰC ĐỘNG CƠ: Thay vì để LAST_STAND dùng IMU hỏng để lật xe, ta phanh cứng nó lại để bảo vệ cơ khí.
+                driveBot(0, 0); 
+                
+                // Xóa cờ Notification và bắt đầu lại chu kỳ
+                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(5));
+                continue; 
+            }
+
             // ƯU TIÊN 1: Lật xe/rớt đài
             if (localData.fallOut) {
                 if (currentState != STATE_DEF_LAST_STAND) {
