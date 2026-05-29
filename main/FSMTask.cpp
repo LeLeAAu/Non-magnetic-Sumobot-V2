@@ -4,7 +4,8 @@
 #include "Config.h"
 #include "MotorControl.h"
 #include <Arduino.h>   
-#include <math.h>       
+#include <math.h>     
+#include <atomic>  
 
 // Hàm phụ trợ nhằm tính toán góc xuất hiện nhiều nhất của đối thủ để dự đoán vị trí
 float getModeAngle(float* history, int size);
@@ -27,9 +28,23 @@ void TaskFSMCode(void * pvParameters) {
 
         // Data spapshot
         SystemData localData; // Bản sao cục bộ chỉ sống trong vòng lặp này
-        xSemaphoreTake(dataMutex, portMAX_DELAY); // Khóa Mutex an toàn
-        localData = sysData;          
-        xSemaphoreGive(dataMutex); // Mở khóa
+        uint32_t fsm_current_time = millis();
+
+        // Đọc không khoá, lấy dữ liệu từ buffer mới nhất với tốc độ cao
+        SystemData localData = sysBuffer[read_index.load()]; 
+
+        // Giám sát watchdog: Kiểm tra xem dữ liệu có bị freeze không
+        if (fsm_current_time - localData.timestamp > 150) { 
+            Serial.println(">>> CRITICAL ERROR: SENSOR CORE FROZEN! <<<");
+
+            // Xử lý khẩn cấp khi bị mù thông tin (ví dụ: Phanh cứng hoặc Lùi thủ thế)
+            if (currentState != STATE_IDLE && currentState != STATE_DEF_LAST_STAND) {
+                driveBot(-PWM_MAX, -PWM_MAX); 
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(5)); // Chờ nhẹ để nhường Core phục hồi bus I2C
+            continue;                     // Bỏ qua chu kỳ logic FSM lỗi này
+        }
         // TỪ ĐÂY TRỞ XUỐNG, CHỈ SỬ DỤNG localData. TUYỆT ĐỐI KHÔNG GỌI sysData
 
         // Global Safety layer
@@ -138,9 +153,6 @@ void TaskFSMCode(void * pvParameters) {
                         } else {
                             enterState(STATE_SEARCH_ENEMY);
                             if (target_angle != 999.0) { // Xoay robot về góc đã ghi nhớ
-                                xSemaphoreTake(dataMutex, portMAX_DELAY);
-                                sysData.enemy_angle = target_angle; 
-                                xSemaphoreGive(dataMutex);
                                 Serial.print(">>> DELAY XONG: TÌM KIẾM THEO GÓC GHI NHỚ: ");
                                 Serial.println(target_angle);
                             } else {

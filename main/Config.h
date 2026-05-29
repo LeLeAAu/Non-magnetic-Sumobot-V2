@@ -131,13 +131,13 @@ struct SystemData {
     uint16_t line[4] = {0, 0, 0, 0}; // Giá trị từ 4 cảm biến Line
     
     // IMU & Kinematics Variables
-    float pitch = 0.0, roll = 0.0, yaw = 0.0;
-    float accelX = 0.0, accelY = 0.0, accelZ = 0.0;
-    float enemy_angle = 0.0; // Góc của đối thủ so với trực chính của bot       
-    float v_0 = 0.0; // Vận tốc của bot
-    float v_e = 0.0; // Vận tốc tiếp cận của bot đối thủ
-    float t_robot = 0.0, t_enemy = 9999.0; // Thời gian dự kiến để chạm mục tiêu
-    int current_PWM = 0; // Giá trị PWM hiện tại đang xuất ra motor
+    float pitch = 0.0f, roll = 0.0f, yaw = 0.0f;
+    float accelX = 0.0f, accelY = 0.0f, accelZ = 0.0f;
+    float enemy_angle = 0.0f; // Góc của đối thủ so với trực chính của bot       
+    float v_0 = 0.0f; // Vận tốc của bot
+    float v_e = 0.0f; // Vận tốc tiếp cận của bot đối thủ
+    float t_robot = 0.0f, t_enemy = 9999.0f; // Thời gian dự kiến để chạm mục tiêu
+    uint16_t current_PWM = 0; // Giá trị PWM hiện tại đang xuất ra motor
     
     // Boolean Flags (Chỉ chứa data do Sensor Core 0 tạo ra)
     bool closingFast = false; // Đối thủ đang lao tới nhanh
@@ -151,12 +151,18 @@ struct SystemData {
     bool liftedFront = false; // Bị nâng mũi
     bool liftedRear = false; // Bị nâng đuôi
     bool beingLifted = false; // Đang bị đối thủ nâng
+    uint32_t timestamp = 0; // Đánh dấu thời gian dữ liệu xuất xưởng
 };
 
-// Khai báo biến toàn cục (extern)
+// Khai báo biến toàn cục
 const char* getStateName(RobotState state);
-extern SystemData sysData;
-extern SemaphoreHandle_t dataMutex;
+
+// Hệ thống Lock-Free Double-Buffer
+extern SystemData sysBuffer[2];
+extern std::atomic<uint8_t> read_index;
+extern std::atomic<int> active_pwm;
+
+// Trạng thái FSM & Kích hoạt OLED
 extern volatile RobotState currentState;
 extern volatile RobotState previousState;
 extern volatile bool needsDisplayUpdate;
@@ -164,10 +170,12 @@ extern bool go_lock;
 extern uint32_t go_start_time;
 extern uint32_t state_start_time;
 extern bool state_just_entered;
+
+// Lịch sử cảm biến
 extern uint16_t dist_history[5][3];
 extern uint8_t dist_idx[5];
 
-// Cho Motor/Sensor
+// Đối tượng Cảm biến & Task (Chạy đa luồng)
 extern VL53L1X sensorsToF[5]; 
 extern LSM6DS3 myIMU;
 extern TaskHandle_t TaskSensorHandle;

@@ -6,6 +6,7 @@
 #include <VL53L1X.h>
 #include <SparkFunLSM6DS3.h>
 #include <math.h>    
+#include <atomic>
 
 // HÀM PHỤ TRỢ
 // Chuyển đổi PWM sang vận tốc tuyến tính xấp xỉ mm/s
@@ -48,10 +49,16 @@ void TaskSensorCode(void * pvParameters) {
     for(;;) {
         uint32_t current_time = millis();
         SystemData tempData; // Bản sao làm việc cục bộ
-        // Khoá Mutex an toàn trước khi copy dữ liệu
-        xSemaphoreTake(dataMutex, portMAX_DELAY);
-        tempData = sysData;
-        xSemaphoreGive(dataMutex);
+        uint32_t current_time = millis();
+
+        // Xác định xem FSM đang đọc buffer nào, ta sẽ viết vào buffer còn lại
+        uint8_t write_index = 1 - read_index.load(); 
+
+        // Lấy lại dữ liệu cũ của chính buffer đó làm nền tảng tính toán tiếp
+        SystemData tempData = sysBuffer[write_index]; 
+
+        // Đọc trực tiếp giá trị PWM từ Core 1 gửi sang thông qua biến Atomic riêng biệt
+        tempData.current_PWM = active_pwm.load();
 
         bool has_new_tof = false;
         
@@ -262,10 +269,19 @@ void TaskSensorCode(void * pvParameters) {
             tempData.sideDanger = false;
         }
 
-        // LƯU DỮ LIỆU VÀ WAKE UP FSM
-        xSemaphoreTake(dataMutex, portMAX_DELAY);
-        sysData = tempData; // Đồng bộ bản sao hoàn thiện vào hệ thống
-        xSemaphoreGive(dataMutex);
+        // Đóng dấu thời gian ngay trước khi xuất xưởng dữ liệu
+        tempData.timestamp = millis(); 
+
+        // Đẩy toàn bộ dữ liệu cục bộ vào buffer chuẩn bị hoán đổi
+        sysBuffer[write_index] = tempData; 
+
+        // Lật bài, kích hoạt buffer vừa ghi thành buffer cho FSM đọc
+        read_index.store(write_index); 
+
+        // Giữ nguyên lệnh Notify để đánh thức FSM ngay lập tức nếu có biến cố nguy hiểm
+        if (tempData.edgeDetect || tempData.fallOut || tempData.beingLifted || tempData.impactDetected) {
+            if (TaskFSMHandle != NULL) xTaskNotifyGive(TaskFSMHandle);
+        }
 
         // Ngắt mềm
         // Nếu phát hiện các event nguy hiểm -> không đợi FSM ở Core 1 tự quay lại loop -> Core 0 phát tín hiệu TaskNotify vào thẳng FSM ép nó wake up xử lí ngay trong 0ms

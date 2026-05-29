@@ -6,8 +6,40 @@
 
 // Việc dùng ToF tạo khoảng delay đo khoảng cách khá lớn. Nếu sau này có một cuộc thi khác thì sẽ chuyển dùng cảm biến ánh sáng khác
 
+// KHÔNG ĐƯỢC GIẢM BUDGET setMeasurementTimingBudget(33000) XUỐNG VÌ SẼ GÂY RA LỖI
+
+// Problems
+/*
+- OLED Adafruit_SSD1306 clear & redraw toàn bộ mỗi 100ms -> - Dùng partial update (display.fillRect() cho vùng thay đổi) hoặc chuyển sang u8g2 với buffer 1-bit + Giảm tần suất xuống rất chậm
+- Debug Serial mỗi 500ms in ~20 dòng -> - Chuyển sang chế độ conditional (#define DEBUG_LEVEL 0/1/2) hoặc dùng telemetry binary (COBS/Protobuf) giảm overhead UART
+- Chỉ halt lúc boot nếu lỗi sensor, không giám sát runtime
+- Đòn giả FEINT_CHANCE = 25 random thuần túy -> Chuyển thành trigger có điều kiện: sau 2 lần ATK_STRIKE thất bại (v_e < 50mm/s), hoặc khi isTargetLost < 200ms
+- ATK_LOCK_TIME = 500 cố định -> Scale theo dist[0]: lock_time = map(dist[0], 200, 1500, 200, 700) để ngắm chính xác hơn ở cự ly khác nhau
+- biến last_tof_update nhưng chỉ dùng để set tempData.dist[i] = 8190; khi timeout. Tuyệt vời. Nhưng nếu ToF bị treo ở mức thấp hơn, nó vẫn có thể gây ra dữ liệu sai. -> Trong SensorTask, nếu current_time - last_tof_update[i] > 1000 (1 giây không data), hãy thực hiện hard reset cảm biến đó bằng cách kéo chân XSHUT xuống LOW trong 50ms rồi lên HIGH, và gọi lại init() cho nó.
+- chỉ kiểm tra myIMU.begin() != 0 một lần duy nhất ở setup(), khiến IMU có thể bị treo nếu va đập mạnh ->  thêm một biến last_imu_update. Nếu current_time - last_imu_update > 200ms, hãy gọi myIMU.begin() lại để khởi tạo lại
+*/
+
 // Todo list (dùng cho tất cả các file kể cả file main.ino này)
 /*
+
+- Thêm checkSensorHealth() mỗi 1s: timeout ToF, IMU disconnect, TCRT stuck. Nếu lỗi >3 lần → STATE_DEF_LAST_STAND
+- Thêm một trạng thái tấn công mới: STATE_ATK_ANVIL_BREAKER
+    + Kích hoạt: Khi STATE_ATK_LOCK thất bại sau 2 lần lock_retries và localData.v_e (vận tốc đối thủ) là rất nhỏ (ví dụ < 50mm/s). Điều này có nghĩa đối thủ đang "đứng yên" hoặc "bám sàn" như Anvil.
+    + Hành vi
+        ~ Không lao thẳng vào. Thay vào đó, thực hiện một cú "giật lùi" nhanh (-PWM_MAX, -PWM_MAX trong 100ms) để tạo khoảng cách.
+        ~ Sau đó, thực hiện một pha tạt sườn với bán kính cực lớn (driveBot(180, 50) hoặc driveBot(50, 180) tùy hướng) để tiếp cận từ góc 45 độ.
+- Trong STATE_ATK_LOCK, thay vì chỉ kiểm tra sideDanger, hãy thêm kiểu:
+    if (tempData.flkPossible && fabsf(err_angle) > ANGLE_TIGHT) {
+        enterState(STATE_ATK_FLANK_SIDE);
+        break;
+}
+
+*/
+
+// Qs - Ans
+/*
+- Có nên giảm vTaskDelay(pdMS_TO_TICKS(50)); xuống k? - Không
+
 */
 
 #include "Config.h"
@@ -15,14 +47,16 @@
 #include "DisplayFace.h"
 #include "SensorTask.h"
 #include "FSMTask.h"
+#include <atomic>
 
 // Khởi tạo đối tượng hệ thống
 TwoWire I2COLED = TwoWire(1);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &I2COLED, OLED_RESET);
 
 // Quản lí dữ liệu và trạng thái toàn cục
-SystemData sysData; // Kho lưu trữ dữ liệu cảm biến và biến động học
-SemaphoreHandle_t dataMutex = NULL; // Có tác dụng ngăn chặn xung đột giữ liệu giữa 2 Core
+SystemData sysBuffer[2];               // Double-Buffer // thay thế cho sysData đơn
+std::atomic<uint8_t> read_index(0);    // Con trỏ nguyên tử chỉ vị trí buffer FSM sẽ đọc
+std::atomic<int> active_pwm(0);        // Tách riêng PWM ra biến atomic để tránh ghi đè chéo
 volatile RobotState currentState = STATE_IDLE;
 volatile RobotState previousState = STATE_IDLE;
 volatile bool needsDisplayUpdate = false;
@@ -59,7 +93,6 @@ void setup() {
     // Cấu hình bus cảm biến chính
     Wire.begin(I2C_SDA, I2C_SCL); // <--- ÉP I2C CHẠY TRÊN CHÂN 26 VÀ 25
     Wire.setClock(400000); // Fast mode I2C
-    dataMutex = xSemaphoreCreateMutex(); // Khởi tạo Mutex bảo mật dữ liệu
 
     bool hardwareError = false;
 
@@ -152,14 +185,9 @@ void loop() {
             display.clearDisplay();
             display.setTextColor(SSD1306_WHITE);
 
-            // Lấy data
-            SystemData snap;
-            if (dataMutex != NULL) {
-                xSemaphoreTake(dataMutex, portMAX_DELAY);
-                snap = sysData;
-                xSemaphoreGive(dataMutex);
-            }
-
+            // Lấy snapshot từ buffer
+            SystemData snap = sysBuffer[read_index.load()];
+            
             if (idle_duration < 30000) {  // Dưới 30 giây -> Thức chờ lệnh
                 display.setTextSize(2);
                 display.setCursor(0, 0);
@@ -233,73 +261,85 @@ void loop() {
     if (current_time - last_debug_time >= 500) { 
         last_debug_time = current_time;
         
-        SystemData snap;
-        RobotState state_snap;
-        uint32_t current_state_time = 0;
+        // Đọc atomic từng trường một
+        int dist[5];
+        for(int i=0; i<5; i++) dist[i] = sysData.dist[i].load();
         
-        if (dataMutex != NULL) {
-            xSemaphoreTake(dataMutex, portMAX_DELAY);
-            snap = sysData;
-            state_snap = currentState;
-            current_state_time = millis() - state_start_time;
-            xSemaphoreGive(dataMutex);
-        }
+        float enemy_angle = sysData.enemy_angle.load();
+        float v_e = sysData.v_e.load();
+        bool isTargetLost = sysData.isTargetLost.load();
+        int current_PWM = sysData.current_PWM.load();
+        
+        int line[4];
+        for(int i=0; i<4; i++) line[i] = sysData.line[i].load();
+        
+        float pitch = sysData.pitch.load();
+        float roll = sysData.roll.load();
+        
+        bool edgeDetect = sysData.edgeDetect.load();
+        bool fallOut = sysData.fallOut.load();
+        bool liftedFront = sysData.liftedFront.load();
+        bool liftedRear = sysData.liftedRear.load();
+        bool beingLifted = sysData.beingLifted.load();
+        bool impactDetected = sysData.impactDetected.load();
+        bool closingFast = sysData.closingFast.load();
+        bool sideDanger = sysData.sideDanger.load();
+        bool flkPossible = sysData.flkPossible.load();
+        
+        RobotState state_snap = currentState;  // atomic nếu currentState là atomic
+        uint32_t current_state_time = millis() - state_start_time;  // state_start_time atomic
 
         Serial.println("================================================================");
         
-        // Dòng 1: FSM & Thời gian
         Serial.print("[FSM] STATE: ");
         Serial.print(getStateName(state_snap));
         Serial.print(" | TimeInState: ");
         Serial.print(current_state_time);
         Serial.print(" ms | PWM Output: ");
-        Serial.println(snap.current_PWM);
+        Serial.println(current_PWM);
 
-        // Dòng 2: Mắt thần (ToF) & Động học (Kinematics)
         Serial.print("[ToF] Dist: ");
         for(int i=0; i<5; i++) { 
-            Serial.print(snap.dist[i]); Serial.print(" "); 
+            Serial.print(dist[i]); Serial.print(" "); 
         }
         Serial.print(" | Target: ");
-        if (snap.isTargetLost) {
+        if (isTargetLost) {
             Serial.println("LOST");
         } else {
-            Serial.print(snap.enemy_angle, 1);
+            Serial.print(enemy_angle, 1);
             Serial.print(" deg | v_e: ");
-            Serial.print(snap.v_e, 1);
+            Serial.print(v_e, 1);
             Serial.println(" mm/s");
         }
 
-        // Dòng 3: Dò line & Cảm biến gầm (TCRT)
         Serial.print("[TCRT] Line: ");
         for(int i=0; i<4; i++) { 
-            Serial.print(snap.line[i]); Serial.print(" "); 
+            Serial.print(line[i]); Serial.print(" "); 
         }
         Serial.print("| Bụng: ");
         Serial.println(analogRead(PIN_TCRT_DETECT));
 
-        // Dòng 4: IMU & Cờ cảnh báo (Flags)
         Serial.print("[IMU] P: ");
-        Serial.print(snap.pitch, 1);
+        Serial.print(pitch, 1);
         Serial.print(" | R: ");
-        Serial.print(snap.roll, 1);
+        Serial.print(roll, 1);
         Serial.print(" | [FLAGS]: ");
 
-        if(!snap.edgeDetect && !snap.fallOut && !snap.liftedFront && !snap.liftedRear && !snap.beingLifted && !snap.impactDetected && !snap.closingFast && !snap.sideDanger && !snap.flkPossible) {
+        if(!edgeDetect && !fallOut && !liftedFront && !liftedRear && !beingLifted && !impactDetected && !closingFast && !sideDanger && !flkPossible) {
             Serial.print("ALL CLEAR");
         } else {
-            if(snap.edgeDetect) Serial.print("EDGE! ");
-            if(snap.fallOut) Serial.print("FALL! ");
-            if(snap.liftedFront) Serial.print("LIFT_F! ");
-            if(snap.liftedRear) Serial.print("LIFT_R! ");
-            if(snap.beingLifted) Serial.print("BEING_LIFTED! ");
-            if(snap.impactDetected) Serial.print("IMPACT! ");
-            if(snap.closingFast) Serial.print("RUSHING! ");
-            if(snap.sideDanger) Serial.print("SIDE_DANGER! ");
-            if(snap.flkPossible) Serial.print("FLANK_READY ");
+            if(edgeDetect) Serial.print("EDGE! ");
+            if(fallOut) Serial.print("FALL! ");
+            if(liftedFront) Serial.print("LIFT_F! ");
+            if(liftedRear) Serial.print("LIFT_R! ");
+            if(beingLifted) Serial.print("BEING_LIFTED! ");
+            if(impactDetected) Serial.print("IMPACT! ");
+            if(closingFast) Serial.print("RUSHING! ");
+            if(sideDanger) Serial.print("SIDE_DANGER! ");
+            if(flkPossible) Serial.print("FLANK_READY ");
         }
         Serial.println("\n");
     }
 
-    vTaskDelay(pdMS_TO_TICKS(50)); // Giải phóng CPU cho các Task khác
+    vTaskDelay(pdMS_TO_TICKS(50));
 }

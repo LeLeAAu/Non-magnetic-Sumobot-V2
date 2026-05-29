@@ -122,10 +122,5 @@ void driveBot(int leftSpeed, int rightSpeed) {
 
     int fsm_last_pwm = (leftSpeed + rightSpeed) / 2;
 
-    // ĐỒNG BỘ NGAY LẬP TỨC VÀO sysData
-    if (dataMutex != NULL) { // Đảm bảo Mutex đã được khởi tạo
-        xSemaphoreTake(dataMutex, portMAX_DELAY);
-        sysData.current_PWM = fsm_last_pwm; 
-        xSemaphoreGive(dataMutex);
-    }
+    active_pwm.store(fsm_last_pwm);
 }
