@@ -13,10 +13,12 @@
 // 0: SILENT MODE - Dành cho thi đấu thực tế (Tắt toàn bộ Serial, tối ưu hiệu năng 100%)
 // 1: EVENT MODE - Chỉ in các sự kiện quan trọng (Chuyển State, Lỗi phần cứng ngắt hệ thống)
 // 2: VERBOSE MODE - In chi tiết tất cả thông số sensor, kinematics mỗi 500ms (Dùng khi test tại xưởng)
-#define DEBUG_LEVEL 1
+#define DEBUG_LEVEL 2
 
 // Chế độ mô phỏng (bỏ qua phần cứng thật, tự sinh dữ liệu)
 #define SIMULATION_MODE 1   // 1 = bật, 0 = tắt
+
+#define CALIBRATION_MODE 0  // 1: Bật chế độ đo đạc tĩnh (Khóa động cơ), 0: Chế độ thi đấu
 
 // Cấu hình Macro
 #if DEBUG_LEVEL > 0
@@ -152,7 +154,8 @@ enum RobotState {
     STATE_ATK_ANVIL_BREAKER,
     STATE_DEF_ANTI_PUSH, STATE_DEF_SIDE_GUARD, STATE_DEF_REAR_GUARD, 
     STATE_DEF_EDGE_AVOID, STATE_DEF_ANTI_LIFT, STATE_DEF_LAST_STAND,
-    STATE_REC_RECOVER, STATE_SEARCH_ENEMY
+    STATE_REC_RECOVER, STATE_SEARCH_ENEMY,
+    STATE_CALIBRATION
 };
 
 // Cấu trúc dữ liệu hệ thống

@@ -55,6 +55,7 @@ void TaskSensorCode(void * pvParameters) {
     static uint32_t flk_timer_start = 0;
     const float T_MARGIN = 0.1; 
     static uint32_t last_imu_time = millis();
+    static uint32_t last_yaw_time = millis();
     static uint16_t last_valid_dist[5] = {8190, 8190, 8190, 8190, 8190};
     static uint8_t spike_count[5] = {0, 0, 0, 0, 0};
     static bool condition_flank_met = false;
@@ -84,7 +85,16 @@ void TaskSensorCode(void * pvParameters) {
         // ĐỌC CẢM BIẾN VÀ CƠ CHẾ WATCHDOG
         for (int i = 0; i < 5; i++) {
             if (sensorsToF[i].dataReady()) { // Chỉ đọc khi ToF đã báo đo xong - non-blocking mode
-                int raw_dist_calc = (int)sensorsToF[i].read(false) + TOF_OFFSET[i];
+                int raw_dist_calc = (int)sensorsToF[i].read(false);
+                
+                // Kiểm tra trạng thái dữ liệu (RangeStatus == 0 là đo thành công hợp lệ)
+                // Nếu báo lỗi (ngoài tầm, nhiễu sáng, yếu...), ép thẳng khoảng cách thành 8190
+                if (sensorsToF[i].ranging_data.range_status != 0) {
+                    raw_dist_calc = 8190;
+                } else {
+                    raw_dist_calc += TOF_OFFSET[i];
+                }
+                
                 uint16_t raw_dist = (raw_dist_calc < 0) ? 0 : (uint16_t)raw_dist_calc;
                 // Trạng thái idle/chờ -> dùng bộ lọc median để lấy mốc tĩnh
                 if (currentState == STATE_IDLE || currentState == STATE_INIT_DELAY) {
@@ -252,6 +262,14 @@ void TaskSensorCode(void * pvParameters) {
         tempData.pitch = atan2(-tempData.accelX, sqrt(tempData.accelY * tempData.accelY + tempData.accelZ * tempData.accelZ)) * 180.0 / M_PI;
         tempData.roll  = atan2(tempData.accelY, tempData.accelZ) * 180.0 / M_PI;
 
+        // Tích phân Gyro Z để tính Yaw
+        float dt_yaw = (current_time - last_yaw_time) / 1000.0f;
+        last_yaw_time = current_time;
+        float gyroZ = myIMU.readFloatGyroZ();
+        if (fabsf(gyroZ) > 1.0f) { // Lọc nhiễu nhỏ (deadband)
+            tempData.yaw += gyroZ * dt_yaw;
+        }
+
         bool pitchUp   = (tempData.pitch > PITCH_TH); // Ngóc đầu lên
         bool pitchDown = (tempData.pitch < -PITCH_TH);  // Cắm đầu xuống
         bool rollChange = fabsf(tempData.roll) > PITCH_TH;  // Nghiêng lật xe
@@ -333,30 +351,44 @@ void TaskSensorCode(void * pvParameters) {
             bool is_error_now = false;
 
             // Kiểm tra ToF Timeout & Hard Reset
+            bool tof_timeout[5] = {false, false, false, false, false};
+            bool need_tof_reset = false;
+
             for (int i = 0; i < 5; i++) {
                 if (current_time - last_tof_update[i] > 1000) {
+                    tof_timeout[i] = true;
+                    need_tof_reset = true;
                     is_error_now = true;
-                    DEBUG_PRINTF(">>> SENSOR HEALTH: ToF %d TIMEOUT! Hard Resetting...\n", i);
+                    DEBUG_PRINTF(">>> SENSOR HEALTH: ToF %d TIMEOUT! Flagged for reset...\n", i);
                     
-                    // Ép reset cứng bằng chân XSHUT
+                    // Kéo LOW tất cả các ToF bị lỗi CÙNG LÚC để tắt chúng đi
+                    // Tránh việc nhiều ToF cùng boot lên và tranh chấp địa chỉ I2C mặc định 0x29
                     digitalWrite(XSHUT_PINS[i], LOW);
-                    vTaskDelay(pdMS_TO_TICKS(50));
-                    
-                    // Cấp nguồn lại và đợi IC khởi động
-                    digitalWrite(XSHUT_PINS[i], HIGH);
-                    vTaskDelay(pdMS_TO_TICKS(15)); // Khuyến cáo của datasheet là chờ ít nhất 1.2ms
-                    
-                    // Cố gắng khởi tạo lại (bỏ qua nếu I2C bus bị treo)
-                    if (sensorsToF[i].init()) {
-                        sensorsToF[i].setAddress(VLX_ADDRESSES[i]);
-                        sensorsToF[i].setDistanceMode(VL53L1X::Long);
-                        sensorsToF[i].setMeasurementTimingBudget(33000);
-                        sensorsToF[i].startContinuous(34);
+                }
+            }
+
+            if (need_tof_reset) {
+                vTaskDelay(pdMS_TO_TICKS(50)); // Chờ tắt hẳn
+
+                for (int i = 0; i < 5; i++) {
+                    if (tof_timeout[i]) {
+                        // Kéo HIGH TỪNG ToF MỘT
+                        digitalWrite(XSHUT_PINS[i], HIGH);
+                        vTaskDelay(pdMS_TO_TICKS(15)); // Khuyến cáo của datasheet là chờ ít nhất 1.2ms
                         
-                        DEBUG_PRINTF(">>> ToF %d Revived!\n", i);
-                        last_tof_update[i] = current_time; // Gia hạn mạng sống thêm 1s
-                    } else {
-                        DEBUG_PRINTF(">>> ToF %d Reset FAILED!\n", i);
+                        // Cố gắng khởi tạo lại và đổi địa chỉ
+                        if (sensorsToF[i].init()) {
+                            sensorsToF[i].setAddress(VLX_ADDRESSES[i]); // Đợi ToF này đổi địa chỉ an toàn xong
+                            sensorsToF[i].setDistanceMode(VL53L1X::Long);
+                            sensorsToF[i].setMeasurementTimingBudget(33000);
+                            sensorsToF[i].startContinuous(34);
+                            
+                            DEBUG_PRINTF(">>> ToF %d Revived!\n", i);
+                            last_tof_update[i] = current_time; // Gia hạn mạng sống thêm 1s
+                        } else {
+                            DEBUG_PRINTF(">>> ToF %d Reset FAILED!\n", i);
+                        }
+                        // Vòng lặp mới chuyển sang ToF tiếp theo để kéo HIGH
                     }
                 }
             }

@@ -8,11 +8,14 @@
 
 // KHÔNG ĐƯỢC GIẢM BUDGET setMeasurementTimingBudget(33000) XUỐNG VÌ SẼ GÂY RA LỖI
 
+// KHÔNG DÙNG CÁC FILTER LỌC NHIỄU GÌ ĐÓ BỞI VÌ ĐO BẰNG VLX CÓ DELAY RẤT LỚN, NẾU DÙNG NÓ CÓ THỂ LÀM GIẢM KHẢ NĂNG PHẢN ỨNG CỦA BOT
+
 //Todo
 /*
-- Trong vòng lặp Watchdog, nếu phát hiện lỗi, hãy chỉ reset từng ToF một. Phải đợi ToF thứ nhất đổi xong địa chỉ an toàn mới được kéo chân XSHUT của ToF thứ hai lên HIGH
-- Trong setup(), ngay sau Wire.begin(), hãy thêm lệnh ép timeout cho I2C phần cứng: Wire.setTimeOut(10);. Nếu có lỗi, nó sẽ tự nhả luồng sau 10ms.
-- Khi ToF không đo được khoảng cách (ví dụ địch ở xa hơn 4 mét hoặc nhiễu sáng), hàm sensorsToF[i].read() đôi khi không trả về 8190 mà trả về giá trị rác của lần đo trước đó, hoặc một con số nhiễu nhỏ giật cục -> phải đọc cờ trạng thái của cảm biến trước khi lấy số liệu. Thư viện VL53L1X thường có hàm kiểm tra data status (chỉ số RangeStatus == 0 mới là đo thành công). Nếu status báo lỗi, hãy chủ động ép raw_dist = 8190
+
+
+
+-
 */
 
 
@@ -82,6 +85,7 @@ void setup() {
 
     // Cấu hình bus cảm biến chính
     Wire.begin(I2C_SDA, I2C_SCL); // <--- ÉP I2C CHẠY TRÊN CHÂN 26 VÀ 25
+    Wire.setTimeOut(10); // Ép phần cứng I2C tự nhả luồng sau 10ms nếu bị treo
     Wire.setClock(400000); // Fast mode I2C
 
     bool hardwareError = false;
@@ -151,7 +155,7 @@ void setup() {
 
     // Kích hoạt đa nhiệm, đẩy các Task vào các Core tương ứng
     xTaskCreatePinnedToCore(TaskSensorCode, "TaskSensor", 10000, NULL, 1, &TaskSensorHandle, 0);
-    xTaskCreatePinnedToCore(TaskFSMCode, "TaskFSM", 10000, NULL, 2, &TaskFSMHandle, 1);
+    xTaskCreatePinnedToCore(TaskFSMCode, "TaskFSM", 10000, NULL, 3, &TaskFSMHandle, 1);
 #if DEBUG_LEVEL >= 1
     xTaskCreatePinnedToCore(TelemetryRxTask, "TelemetryRx", 4096, NULL, 1, NULL, 1);
 #endif
@@ -453,6 +457,22 @@ void loop() {
             }
         }
     } 
+    
+    else if (currentState == STATE_CALIBRATION) {
+        if (is_full_redraw_needed) {
+            display.clearDisplay();
+            display.setTextSize(2);
+            display.setTextColor(SSD1306_WHITE);
+            display.setCursor(0, 0);
+            display.println("CALIB MODE");
+            display.setTextSize(1);
+            display.setCursor(0, 20);
+            display.println("Motors: LOCKED");
+            display.display();
+            is_full_redraw_needed = false;
+        }
+    }
+
     else {
         is_full_redraw_needed = true;
         // Logic vẽ mặt

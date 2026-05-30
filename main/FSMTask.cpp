@@ -30,6 +30,12 @@ void TaskFSMCode(void * pvParameters) {
         // Data spapshot
         // Đọc không khoá, lấy dữ liệu từ buffer mới nhất với tốc độ cao
         SystemData localData = sysBuffer[read_index.load()]; 
+        // Chặn quyền điều khiển nếu đang bật CALIBR
+#if CALIBRATION_MODE == 1
+            if (currentState != STATE_CALIBRATION) {
+                enterState(STATE_CALIBRATION);
+            }
+#endif
 
         // Giám sát watchdog: Kiểm tra xem dữ liệu có bị freeze không
         if (fsm_current_time - localData.timestamp > 150) { 
@@ -124,6 +130,16 @@ void TaskFSMCode(void * pvParameters) {
         switch (currentState) {
             
             // NHÓM 1: KHỞI TẠO (INIT)
+
+            case STATE_CALIBRATION:
+            {
+                driveBot(0, 0); // Khóa cứng động cơ tuyệt đối
+                
+                // Bot không làm gì cả, chỉ ngồi ngoan ngoãn thu thập dữ liệu ToF, IMU, TCRT 
+                // để Telemetry (Core 0) bắn lên Python UI cho bạn phân tích.
+                break;
+            }
+            
             case STATE_IDLE:
             {
                 driveBot(0, 0); // Khoá động cơ
@@ -209,15 +225,16 @@ void TaskFSMCode(void * pvParameters) {
                     bool edge_BR = (!ignore_rear)  && (localData.line[3] <= TCRT_EDGE_TH);
 
                     // Logic phán đoán không còn bị lừa bởi báo động giả
-                    if (edge_FL && edge_FR) { esc_l = -PWM_MAX; esc_r = -PWM_LOW; } // Mũi dính -> Lùi móc cua phải
-                    else if (edge_BL && edge_BR) { esc_l = PWM_MAX; esc_r = PWM_LOW; } // Đít dính -> Tiến móc cua phải
-                    else if (edge_FL && edge_BR) { esc_l = -PWM_MAX; esc_r = PWM_MAX; } // Chéo 1 -> Xoay tại chỗ lùi
-                    else if (edge_FR && edge_BL) { esc_l = PWM_MAX; esc_r = -PWM_MAX; } // Chéo 2 -> Xoay tại chỗ tiến
-                    else if (edge_FL) { esc_l = -PWM_MAX; esc_r = -PWM_LOW; } // Trái dính -> Lùi vòng phải
-                    else if (edge_FR) { esc_l = -PWM_LOW; esc_r = -PWM_MAX; } // Phải dính -> Lùi vòng trái
-                    else if (edge_BL) { esc_l = PWM_MAX; esc_r = PWM_LOW; }   // Đít trái dính -> Tiến vòng phải
-                    else if (edge_BR) { esc_l = PWM_LOW; esc_r = PWM_MAX; }   // Đít phải dính -> Tiến vòng trái
-                    else { esc_l = -PWM_MAX; esc_r = -PWM_LOW; } // Fallback: Lùi móc cua
+                    // Xoay nhẹ (Dùng PWM_PIVOT) thay vì lùi hết ga (PWM_MAX)
+                    if (edge_FL && edge_FR) { esc_l = -PWM_PIVOT; esc_r = -PWM_LOW; } // Mũi dính -> Lùi vòng phải nhẹ
+                    else if (edge_BL && edge_BR) { esc_l = PWM_PIVOT; esc_r = PWM_LOW; } // Đít dính -> Tiến vòng phải nhẹ
+                    else if (edge_FL && edge_BR) { esc_l = -PWM_PIVOT; esc_r = PWM_PIVOT; } // Chéo 1 -> Xoay tại chỗ lùi
+                    else if (edge_FR && edge_BL) { esc_l = PWM_PIVOT; esc_r = -PWM_PIVOT; } // Chéo 2 -> Xoay tại chỗ tiến
+                    else if (edge_FL) { esc_l = -PWM_PIVOT; esc_r = -PWM_LOW; } // Trái dính -> Lùi vòng phải nhẹ
+                    else if (edge_FR) { esc_l = -PWM_LOW; esc_r = -PWM_PIVOT; } // Phải dính -> Lùi vòng trái nhẹ
+                    else if (edge_BL) { esc_l = PWM_PIVOT; esc_r = PWM_LOW; }   // Đít trái dính -> Tiến vòng phải nhẹ
+                    else if (edge_BR) { esc_l = PWM_LOW; esc_r = PWM_PIVOT; }   // Đít phải dính -> Tiến vòng trái nhẹ
+                    else { esc_l = -PWM_PIVOT; esc_r = -PWM_LOW; } // Fallback: Lùi vòng phải nhẹ
                 }
 
                 // Liên tục bơm PWM đã chốt
@@ -350,25 +367,35 @@ void TaskFSMCode(void * pvParameters) {
             {
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
                 static int turn_dir = 1;
+                static float start_yaw = 0.0;
 
                 // Xác định hướng lượn vòng dực vào góc bị đâm sau đít
                 if (state_just_entered) {
                     // Nếu enemy_angle < 0 (Nửa trái), lượn sang Phải (turn_dir = 1)
                     turn_dir = (localData.enemy_angle < 0) ? 1 : -1;
+                    start_yaw = localData.yaw;
                 }
 
-                if (elapsed_time < 400) {
+                // Xoay cho đến khi góc lệch đạt 180 độ (xoay ngược lại 180 độ)
+                if (fabsf(localData.yaw - start_yaw) < 180.0) {
                     // Lượn vòng: 1 bánh full ga, 1 bánh giảm ga
                     if (turn_dir == 1) driveBot(PWM_MAX, 150); 
                     else driveBot(150, PWM_MAX);
+                    
+                    // Timeout dự phòng nếu xe bị kẹt không xoay được
+                    if (elapsed_time > 800) {
+                        enterState(STATE_REC_RECOVER);
+                        DEBUG_PRINTLN(">>> REAR_GUARD TIMEOUT (STUCK) -> RECOVERING");
+                    }
                 } 
                 else {
+                    // Đã xoay đủ 180 độ
                     if (localData.flkPossible) {
                         enterState(STATE_ATK_FLANK_REAR);
-                        DEBUG_PRINTLN(">>> REAR_GUARD -> TURN TO FLANK REAR");
+                        DEBUG_PRINTLN(">>> REAR_GUARD (180deg) -> TURN TO FLANK REAR");
                     } else {
                         enterState(STATE_REC_RECOVER);
-                        DEBUG_PRINTLN(">>> REAR_GUARD -> RECOVERING");
+                        DEBUG_PRINTLN(">>> REAR_GUARD (180deg) -> RECOVERING");
                     }
                 }
                 break;
@@ -953,6 +980,18 @@ void TaskFSMCode(void * pvParameters) {
 }
 
 void enterState(RobotState newState) {
+    // --- LỌC NHIỄU (DEBOUNCE) STATE ---
+    // Tránh tình trạng bot nhảy liên tục giữa các trạng thái trong vài ms
+    if (newState != STATE_DEF_LAST_STAND && 
+        newState != STATE_DEF_EDGE_AVOID && 
+        newState != STATE_DEF_ANTI_LIFT &&
+        newState != STATE_REC_RECOVER) {
+        
+        if (millis() - state_start_time < MIN_STT_TIME) {
+            return; // Bỏ qua lệnh chuyển trạng thái này
+        }
+    }
+
     RobotState oldState = currentState; // Giữ lại state cũ để so sánh
     previousState = oldState;
 
@@ -1022,6 +1061,7 @@ const char* getStateName(RobotState state) {
         case STATE_DEF_LAST_STAND: return "LAST_STAND";
         case STATE_REC_RECOVER: return "RECOVER";
         case STATE_SEARCH_ENEMY: return "SEARCH";
+        case STATE_CALIBRATION: return "CALIB_MODE";
         default: return "UNKNOWN";
     }
 }
