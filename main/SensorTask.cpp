@@ -7,8 +7,15 @@
 #include <SparkFunLSM6DS3.h>
 #include <math.h>    
 #include <atomic>
-#include "COBS.h"
-#include "crc16.h"
+#include "telemetry_utils.h"
+
+#if SIMULATION_MODE
+    static float sim_angle = 0.0f;
+    static float sim_dist_front = 500.0f;
+    static float sim_v_e = 0.0f;
+    static uint32_t last_sim_time = 0;
+    static int sim_step = 0;
+#endif
 
 
 static uint8_t tx_buffer[256];
@@ -70,13 +77,15 @@ void TaskSensorCode(void * pvParameters) {
 
         // Đọc trực tiếp giá trị PWM từ Core 1 gửi sang thông qua biến Atomic riêng biệt
         tempData.current_PWM = active_pwm.load();
-
+#if !SIMULATION_MODE
+        // TOÀN BỘ LOGIC CẢM BIẾN THẬT
         bool has_new_tof = false;
         
         // ĐỌC CẢM BIẾN VÀ CƠ CHẾ WATCHDOG
         for (int i = 0; i < 5; i++) {
             if (sensorsToF[i].dataReady()) { // Chỉ đọc khi ToF đã báo đo xong - non-blocking mode
-                uint16_t raw_dist = sensorsToF[i].read(false);
+                int raw_dist_calc = (int)sensorsToF[i].read(false) + TOF_OFFSET[i];
+                uint16_t raw_dist = (raw_dist_calc < 0) ? 0 : (uint16_t)raw_dist_calc;
                 // Trạng thái idle/chờ -> dùng bộ lọc median để lấy mốc tĩnh
                 if (currentState == STATE_IDLE || currentState == STATE_INIT_DELAY) {
                     dist_history[i][dist_idx[i]] = raw_dist;
@@ -274,7 +283,11 @@ void TaskSensorCode(void * pvParameters) {
         if (tempData.edgeDetect) last_edge_time = current_time;
 
         // Phân tích trạng thái vật lí / tranh chấp
-        tempData.liftDetected = (tcrt_detect_val <= TCRT_LIFT_TH);
+        // Ràng buộc vật lý: Chỉ đang bế địch nếu TCRT bị che VÀ d0 phải sát mặt (< DIST_CLOSE) hoặc mù/chỉ lên trời (> DIST_BLIND)
+        bool is_tcrt_triggered = (tcrt_detect_val <= TCRT_LIFT_TH);
+        bool is_d0_valid = (tempData.dist[0] < DIST_CLOSE || tempData.dist[0] > DIST_BLIND);
+        tempData.liftDetected = is_tcrt_triggered && is_d0_valid;
+        
         bool enemy_at_rear = (tempData.dist[3] < WARN_DIST || tempData.dist[4] < WARN_DIST);
 
         tempData.liftedFront = pitchUp && (tempData.dist[0] < WARN_DIST) && (!tempData.liftDetected);
@@ -386,6 +399,91 @@ void TaskSensorCode(void * pvParameters) {
 
             last_health_check = current_time;
         }
+#else
+        // SIMULATION MODE: Đọc dữ liệu inject từ Python UI
+        tempData.timestamp = current_time;
+
+        if (current_time - last_sim_time >= 40) { 
+            // Tự động tính vận tốc v_e (mm/s) dựa trên tốc độ bạn kéo slider d0
+            static float prev_sim_d0 = 2000.0f;
+            float dt = (current_time - last_sim_time) / 1000.0f;
+            float v_raw = -(sim_in_dist[0] - prev_sim_d0) / dt; 
+            
+            // Lọc nhiễu nhẹ để số v_e khỏi nhảy loạn xạ khi tay bạn kéo slider giật cục
+            tempData.v_e = (0.3 * v_raw) + (0.7 * tempData.v_e);
+            prev_sim_d0 = sim_in_dist[0];
+            
+            last_sim_time = current_time;
+        }
+
+        // Bơm data từ biến toàn cục vào buffer của xe
+        tempData.dist[0] = sim_in_dist[0];
+        tempData.dist[1] = sim_in_dist[1]; 
+        tempData.dist[2] = sim_in_dist[2]; 
+        tempData.dist[3] = sim_in_dist[3]; 
+        tempData.dist[4] = sim_in_dist[4];
+
+        tempData.line[0] = sim_in_line[0]; // FL
+        tempData.line[1] = sim_in_line[1]; // FR
+        tempData.line[2] = sim_in_line[2]; // BL
+        tempData.line[3] = sim_in_line[3]; // BR
+        uint16_t tcrt_detect_val = sim_in_line[4];
+
+        // Logic giả lập mồi cho FSM hoạt động
+        tempData.isTargetLost = (sim_in_dist[0] >= 2000 && sim_in_dist[1] >= 2000 && sim_in_dist[2] >= 2000 && sim_in_dist[3] >= 2000 && sim_in_dist[4] >= 2000);
+        
+        // Mô phỏng góc tạt ngang (Kéo d1, d2, d3, d4 để bẻ góc)
+        float sum_x = 0.0, sum_y = 0.0, sum_weights = 0.0;
+        
+        for (int i = 0; i < 5; i++) {
+            // Chỉ tính toán các cảm biến quét trúng mục tiêu trong tầm CONF_ENY
+            if (tempData.dist[i] < CONF_ENY) {
+                float d_val = (tempData.dist[i] < 1.0f) ? 1.0f : (float)tempData.dist[i];
+                // Vật càng gần, trọng số càng lớn (tỷ lệ nghịch với bình phương khoảng cách)
+                float weight = 1000000.0f / (d_val * d_val);
+                sum_x += SENSOR_SIN[i] * weight;
+                sum_y += SENSOR_COS[i] * weight;
+                sum_weights += weight;
+            }
+        }
+
+        if (sum_weights > 0.0) {
+            tempData.enemy_angle = atan2(sum_x, sum_y) * 180.0 / M_PI; 
+        } else {
+            // Nếu không có cảm biến nào < CONF_ENY, giữ nguyên góc hoặc gán 0
+            tempData.enemy_angle = 0.0f; 
+        }
+
+        tempData.closingFast = (tempData.v_e > 450.0f);
+        tempData.v_0 = getEstimatedVelocity(tempData.current_PWM);
+
+        // Giả lập IMU luôn thăng bằng
+        tempData.pitch = 0.0f; tempData.roll = 0.0f;
+        tempData.accelX = 0.0f; tempData.accelY = 0.0f; tempData.accelZ = -1.0f;
+
+        // Bơm cờ hệ thống theo giá trị TCRT bạn cấu hình
+        tempData.hardwareFailure = false;
+        tempData.edgeDetect = (tempData.line[0] < TCRT_EDGE_TH || tempData.line[1] < TCRT_EDGE_TH || tempData.line[2] < TCRT_EDGE_TH || tempData.line[3] < TCRT_EDGE_TH);
+        
+        bool is_tcrt_triggered = (tcrt_detect_val <= TCRT_LIFT_TH);
+        bool is_d0_valid = (tempData.dist[0] < DIST_CLOSE || tempData.dist[0] > DIST_BLIND);
+        tempData.liftDetected = is_tcrt_triggered && is_d0_valid;
+        
+        // Đạp vạch trắng thì đánh thức FSM ngay lập tức (Ngắt mô phỏng)
+        if (tempData.edgeDetect) {
+            xTaskNotifyGive(TaskFSMHandle); 
+        }
+
+        tempData.fallOut = false;
+        tempData.impactDetected = false;
+        tempData.sideDanger = false;
+        tempData.liftedFront = false;
+        tempData.liftedRear = false;
+        tempData.beingLifted = false;
+#endif
+        sysBuffer[write_index] = tempData;
+        read_index.store(write_index);
+
         // Trả lại tài nguyên CPU
         vTaskDelay(5 / portTICK_PERIOD_MS);
     }
@@ -450,3 +548,5 @@ void send_telemetry(const SystemData &data, RobotState state) {
     Serial.write(cobs_buffer, cobs_len);
     Serial.write(0x00);
 }
+
+

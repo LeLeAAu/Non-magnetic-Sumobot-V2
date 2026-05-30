@@ -8,6 +8,12 @@
 
 // KHÔNG ĐƯỢC GIẢM BUDGET setMeasurementTimingBudget(33000) XUỐNG VÌ SẼ GÂY RA LỖI
 
+//Todo
+/*
+- Trong vòng lặp Watchdog, nếu phát hiện lỗi, hãy chỉ reset từng ToF một. Phải đợi ToF thứ nhất đổi xong địa chỉ an toàn mới được kéo chân XSHUT của ToF thứ hai lên HIGH
+- Trong setup(), ngay sau Wire.begin(), hãy thêm lệnh ép timeout cho I2C phần cứng: Wire.setTimeOut(10);. Nếu có lỗi, nó sẽ tự nhả luồng sau 10ms.
+- Khi ToF không đo được khoảng cách (ví dụ địch ở xa hơn 4 mét hoặc nhiễu sáng), hàm sensorsToF[i].read() đôi khi không trả về 8190 mà trả về giá trị rác của lần đo trước đó, hoặc một con số nhiễu nhỏ giật cục -> phải đọc cờ trạng thái của cảm biến trước khi lấy số liệu. Thư viện VL53L1X thường có hàm kiểm tra data status (chỉ số RangeStatus == 0 mới là đo thành công). Nếu status báo lỗi, hãy chủ động ép raw_dist = 8190
+*/
 
 
 // Qs - Ans
@@ -24,9 +30,14 @@
 #include "SensorTask.h"
 #include "FSMTask.h"
 #include <atomic>
-#include "COBS.h"
-#include "crc16.h"
+#include "telemetry_utils.h"
 #include <freertos/semphr.h>
+
+#if SIMULATION_MODE
+volatile uint16_t sim_in_dist[5] = {2000, 2000, 2000, 2000, 2000};
+volatile uint16_t sim_in_line[5] = {4095, 4095, 4095, 4095, 4095};
+volatile uint16_t sim_in_ttp223 = 0;
+#endif
 
 SemaphoreHandle_t paramMutex;
 
@@ -89,7 +100,7 @@ void setup() {
     ledcAttach(PIN_MOTOR_L_LPWM, 20000, 8);
     ledcAttach(PIN_MOTOR_R_RPWM, 20000, 8);
     ledcAttach(PIN_MOTOR_R_LPWM, 20000, 8);
-
+#if !SIMULATION_MODE
     // Khởi tạo IMU
     if (myIMU.begin() != 0) {
         DEBUG_PRINTLN("IMU Error!");
@@ -133,7 +144,9 @@ void setup() {
             delay(100);
         }
     }
-
+#else
+    DEBUG_PRINTLN(">>> SIMULATION MODE: Bypassing hardware init");
+#endif
     DEBUG_PRINTLN("Init phan cung xong!");
 
     // Kích hoạt đa nhiệm, đẩy các Task vào các Core tương ứng
@@ -176,7 +189,15 @@ void TelemetryRxTask(void *pvParameters) {
                                         updateParameter(param_id, value);
                                     }
                                 } else if (type == 0x03) { // PARAM_GET
-                                    sendAllParameters();  // gói PARAM_RESP
+                                    sendAllParameters();
+                                } else if (type == 0x05) { // SIM_INJECT_DATA
+#if SIMULATION_MODE
+                                    if (len >= 20) { // 10 biến uint16 = 20 bytes
+                                        memcpy((void*)sim_in_dist, &decode_buffer[3], 10);
+                                        memcpy((void*)sim_in_line, &decode_buffer[13], 10);
+                                        memcpy((void*)&sim_in_ttp223, &decode_buffer[23], 2); // Trích xuất trạng thái TTP223
+                                    }
+#endif
                                 }
                             }
                         }
@@ -204,6 +225,12 @@ void updateParameter(uint16_t param_id, float value) {
             case 9:  OMEGA_60 = value; break;
             case 10: KP_STEERING = value; break;
             case 12: ATK_LOCK_TIME = (uint32_t)value; break;
+            case 13: TCRT_EDGE_TH = (uint16_t)value; break;
+            case 14: TOF_OFFSET[0] = (int16_t)value; break;
+            case 15: TOF_OFFSET[1] = (int16_t)value; break;
+            case 16: TOF_OFFSET[2] = (int16_t)value; break;
+            case 17: TOF_OFFSET[3] = (int16_t)value; break;
+            case 18: TOF_OFFSET[4] = (int16_t)value; break;
             default: break;
         }
         xSemaphoreGive(paramMutex);
@@ -234,6 +261,12 @@ void sendAllParameters() {
         packParam(9,  OMEGA_60);
         packParam(10, KP_STEERING);
         packParam(12, (float)ATK_LOCK_TIME);
+        packParam(13, (float)TCRT_EDGE_TH);
+        packParam(14, (float)TOF_OFFSET[0]);
+        packParam(15, (float)TOF_OFFSET[1]);
+        packParam(16, (float)TOF_OFFSET[2]);
+        packParam(17, (float)TOF_OFFSET[3]);
+        packParam(18, (float)TOF_OFFSET[4]);
         xSemaphoreGive(paramMutex);
     }
 

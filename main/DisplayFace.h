@@ -1,7 +1,5 @@
-#ifndef DISPLAYFACE_H
-#define DISPLAYFACE_H
+#pragma once
 
 void drawCurrentFace();
 void showLoading();
 
-#endif

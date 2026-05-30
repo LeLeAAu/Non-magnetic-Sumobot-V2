@@ -1,5 +1,4 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#pragma once
 
 // Thư viện hỗ trợ
 #include <Arduino.h>
@@ -14,7 +13,10 @@
 // 0: SILENT MODE - Dành cho thi đấu thực tế (Tắt toàn bộ Serial, tối ưu hiệu năng 100%)
 // 1: EVENT MODE - Chỉ in các sự kiện quan trọng (Chuyển State, Lỗi phần cứng ngắt hệ thống)
 // 2: VERBOSE MODE - In chi tiết tất cả thông số sensor, kinematics mỗi 500ms (Dùng khi test tại xưởng)
-#define DEBUG_LEVEL 0
+#define DEBUG_LEVEL 1
+
+// Chế độ mô phỏng (bỏ qua phần cứng thật, tự sinh dữ liệu)
+#define SIMULATION_MODE 1   // 1 = bật, 0 = tắt
 
 // Cấu hình Macro
 #if DEBUG_LEVEL > 0
@@ -69,6 +71,7 @@ extern Adafruit_SSD1306 display;
 extern volatile uint16_t CONF_ENY;
 extern volatile uint16_t WARN_DIST;
 extern volatile uint16_t STRIKE_DIST;
+extern volatile int16_t TOF_OFFSET[5];
 
 // --- Thời gian (ms) ---
 extern const uint32_t MIN_STT_TIME;
@@ -88,7 +91,7 @@ extern const uint32_t FLK_DEBOUNCE_TIME;
 // --- Hệ thống ---
 extern const uint8_t RETRY_LIMIT;
 extern const uint8_t MAX_LOCK_RETRIES;
-extern const uint16_t TCRT_EDGE_TH;
+extern volatile uint16_t TCRT_EDGE_TH;
 extern const uint16_t TCRT_LIFT_TH;
 
 // --- Kinematics Calibration ---
@@ -130,6 +133,8 @@ extern const uint16_t DIST_CLOSE;
 extern const uint8_t MEDIAN_WINDOW;
 extern const uint8_t XSHUT_PINS[5];
 extern const uint8_t VLX_ADDRESSES[5];
+
+
 
 
 
@@ -204,4 +209,10 @@ extern LSM6DS3 myIMU;
 extern TaskHandle_t TaskSensorHandle;
 extern TaskHandle_t TaskFSMHandle;
 
+#if SIMULATION_MODE
+extern volatile uint16_t sim_in_dist[5];
+extern volatile uint16_t sim_in_line[5]; // 0:FL, 1:FR, 2:BL, 3:BR, 4:Detect
+extern volatile uint16_t sim_in_ttp223;
 #endif
+
+

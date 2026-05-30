@@ -23,7 +23,7 @@ const uint32_t FLK_DEBOUNCE_TIME = 30;  // Thời gian ân hạn (chống dội)
 // --- Hệ thống ---
 const uint8_t RETRY_LIMIT = 7;          // giới hạn số lần thử đẩy trong 1s để chống rung lắc
 const uint8_t MAX_LOCK_RETRIES = 2;     // số lần tối đa ngắm/đẩy hụt trước khi reset state
-const uint16_t TCRT_EDGE_TH = 500;      // Dưới 500 là vạch trắng
+volatile uint16_t TCRT_EDGE_TH = 500;      // Dưới 500 là vạch trắng
 const uint16_t TCRT_LIFT_TH = 3000;     // Dưới 3000 là có bụng địch đè lên (Bình thường chĩa lên trời là ~4095)
 
 // --- Kinematics Calibration ---
@@ -66,3 +66,6 @@ const uint8_t MEDIAN_WINDOW = 3; // Lọc Median cho cảm biến khoảng cách
 
 const uint8_t XSHUT_PINS[5] = {27, 14, 13, 16, 17};
 const uint8_t VLX_ADDRESSES[5] = {0x30, 0x31, 0x32, 0x33, 0x34};
+
+// Offset cho 5 cảm biến ToF
+volatile int16_t TOF_OFFSET[5] = {0, 0, 0, 0, 0};

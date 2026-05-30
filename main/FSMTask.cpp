@@ -132,11 +132,17 @@ void TaskFSMCode(void * pvParameters) {
                     angle_histogram[hist_idx] = localData.enemy_angle;
                     hist_idx = (hist_idx + 1) % HIST_SIZE;
                 }
-
-                if (digitalRead(PIN_TTP223) == HIGH) { // Chạm nút
-                    enterState(STATE_INIT_DELAY); // Bắt đầu đếm ngược
+#if SIMULATION_MODE
+                if (sim_in_ttp223 > 0) {
+                    enterState(STATE_INIT_DELAY);
+                    DEBUG_PRINTLN(">>> SIMULATION: TTP223 BUTTON CLICKED -> INIT_DELAY");
+                }
+#else
+                if (digitalRead(PIN_TTP223) == HIGH) { 
+                    enterState(STATE_INIT_DELAY); 
                     DEBUG_PRINTLN(">>> START: INIT_DELAY (3 seconds)");
                 } 
+#endif
                 break;
             }
 
@@ -164,7 +170,7 @@ void TaskFSMCode(void * pvParameters) {
                         if (localData.dist[0] < CONF_ENY) { // Địch trước mặt
                             enterState(STATE_ATK_LOCK); // Lock
                             DEBUG_PRINTLN(">>> DELAY XONG: ĐỊCH NGAY TRƯỚC MẶT -> LOCK!");
-
+                        }
                         else if (localData.dist[1] < CONF_ENY || localData.dist[2] < CONF_ENY ||
                                 localData.dist[3] < CONF_ENY || localData.dist[4] < CONF_ENY) {
                             enterState(STATE_ATK_FLANK_SIDE);
@@ -181,7 +187,6 @@ void TaskFSMCode(void * pvParameters) {
                             }
                         }
                     }
-                }
                 break;
             }
 
@@ -405,10 +410,16 @@ void TaskFSMCode(void * pvParameters) {
                         DEBUG_PRINTLN(">>> SEARCH: FOUND IN FRONT (FAR) -> LOCK");
                     }
                 }
+                else if (localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST) {
+                    // Địch áp sát ngang hông (d3, d4) ở cự ly nguy hiểm -> Kích hoạt thoát hiểm tạt sườn
+                    enterState(STATE_DEF_SIDE_GUARD);
+                    DEBUG_PRINTLN(">>> SEARCH: DANGER AT DIRECT SIDE (d3/d4) -> SIDE GUARD EVASION!");
+                }
                 else if (localData.dist[1] < CONF_ENY || localData.dist[2] < CONF_ENY || 
                          localData.dist[3] < CONF_ENY || localData.dist[4] < CONF_ENY) {
+                    // Địch ở chéo (d1, d2) hoặc ở hông nhưng còn xa -> Xoay xe bắt góc tấn công
                     enterState(STATE_ATK_FLANK_SIDE);
-                    DEBUG_PRINTLN(">>> SEARCH: FOUND AT SIDE -> FLANK");
+                    DEBUG_PRINTLN(">>> SEARCH: FOUND AT DIAGONAL/FAR SIDE -> FLANK SIDE");
                 }
                 break;
             }
@@ -797,13 +808,24 @@ void TaskFSMCode(void * pvParameters) {
 
             case STATE_ATK_LIFT:
             {
-                uint32_t elapsed_time = fsm_current_time - state_start_time; // Thêm bộ đếm thời gian
+                uint32_t elapsed_time = fsm_current_time - state_start_time; 
                 driveBot(PWM_MAX, PWM_MAX);
                 
-                // Thêm điều kiện: Nếu nhấc đối thủ quá 1.5s (4400ms) thì tự động buông để chống kẹt
-                if (!localData.liftDetected || elapsed_time > 4400) { 
-                    if (localData.dist[0] < WARN_DIST) enterState(STATE_ATK_STRIKE);
-                    else enterState(STATE_SEARCH_ENEMY);
+                // 1. Chống tự sát: Thấy vạch trắng phải dừng nhấc và lo giữ mạng
+                if (localData.edgeDetect) {
+                    enterState(STATE_DEF_EDGE_AVOID);
+                    DEBUG_PRINTLN(">>> ATK_LIFT: EDGE DETECTED -> ABORT AND AVOID!");
+                    break;
+                }
+
+                // 2. Chống kẹt / Timeout: Nếu nhấc đối thủ quá 2000ms hoặc mục tiêu bị rớt thì buông ra
+                if (!localData.liftDetected || elapsed_time > 2000) { 
+                    if (localData.dist[0] < WARN_DIST) {
+                        enterState(STATE_ATK_STRIKE);
+                    } else {
+                        enterState(STATE_SEARCH_ENEMY);
+                    }
+                    DEBUG_PRINTLN(">>> ATK_LIFT: TIMEOUT OR DROPPED -> NEXT STATE");
                 }
                 break;
             }
