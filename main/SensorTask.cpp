@@ -158,60 +158,70 @@ void TaskSensorCode(void * pvParameters) {
                 d = 8190.0;
             }
 
-            // TÍNH TOÁN ĐỘNG HỌC CHU KÌ ~40ms
-            float dt_kinematic = (current_time - last_kinematic_time) / 1000.0;
+        // TÍNH TOÁN ĐỘNG HỌC CHU KÌ ~40ms
+        float dt_kinematic = (current_time - last_kinematic_time) / 1000.0;
+        static float real_v_e = 0.0f;
+        static bool real_closingFast = false;
+        static float real_t_robot = 0.0f;
+        static float real_t_enemy = 9999.0f;
 
-            if (dt_kinematic >= 0.040) { 
-                static float prev_d = 8190.0;
-                
-                if (!tempData.isTargetLost && prev_d < 8190.0) {
-                    float delta_d = d - prev_d;
-                    // Lọc Deadband: trừ khử nhiễu rung lắc
-                    if (fabsf(delta_d) <= V_DEADBAND_MM) delta_d = 0.0;
+        if (dt_kinematic >= 0.040) { 
+            static float prev_d = 8190.0;
+            
+            if (!tempData.isTargetLost && prev_d < 8190.0) {
+                float delta_d = d - prev_d;
+                // Lọc Deadband: trừ khử nhiễu rung lắc
+                if (fabsf(delta_d) <= V_DEADBAND_MM) delta_d = 0.0;
 
-                    float v_raw = -delta_d / dt_kinematic; // Vận tốc tương đối: Âm -> đang ra xa; Dương -> đang tiếp cận
+                float v_raw = -delta_d / dt_kinematic; // Vận tốc tương đối: Âm -> đang ra xa; Dương -> đang tiếp cận
 
-                    // Bộ lọc Expotential Moving Average EMA
-                    tempData.v_e = (V_EMA_ALPHA * v_raw) + ((1.0 - V_EMA_ALPHA) * tempData.v_e);
-                    tempData.v_0 = getEstimatedVelocity(tempData.current_PWM);
+                // Bộ lọc Expotential Moving Average EMA
+                real_v_e = (V_EMA_ALPHA * v_raw) + ((1.0 - V_EMA_ALPHA) * real_v_e);
 
-                    // Phân loại nhịp độ trận đấu
-                    if (tempData.v_e > 450.0) tempData.closingFast = true; // Địch đang lao nhanh
-                    else if (tempData.v_e < 350.0) tempData.closingFast = false;
-                } else {
-                    tempData.v_e = 0.0;
-                    tempData.closingFast = false;
-                }
-                
-                // Tính toán Intercept Point để tạt sườn
-                // Tính thời gian cần để chạy vòng qua sườn địch (t_robot) so với thời gian địch lao tới (t_enemy)
-                float alpha = tempData.enemy_angle;
-                float x_e = d * sin(alpha * M_PI / 180.0);
-                float y_e = d * cos(alpha * M_PI / 180.0);
-                // Tạo Projection Point bên hông địch
-                float x_p = x_e + R_SIDE * sin((alpha - 90.0) * M_PI / 180.0);
-                float y_p = y_e + R_SIDE * cos((alpha - 90.0) * M_PI / 180.0);
-                float l_path = sqrt(x_p * x_p + y_p * y_p);
-                float theta_target = atan2(x_p, y_p) * 180.0 / M_PI;
-                
-                tempData.t_robot = (fabsf(theta_target) / OMEGA_60) + (l_path / V_MAX_60);
-                tempData.t_enemy = (tempData.v_e < 5.0) ? 9999.0 : (R_SIDE / tempData.v_e);
-                if (d <= DIST_CLOSE || tempData.isTargetLost) {
-                    condition_flank_met = false; // Quá gần, không kịp tạt nữa
-                } else { // Mếu đến được điểm sườn nhanh hơn địch lao tới ngã 3 + khoảng T_MARGIN an toàn
-                    condition_flank_met = ((tempData.t_robot + T_MARGIN) < tempData.t_enemy);
-                }
-
-                prev_d = d;
-                last_kinematic_time = current_time;
+                // Phân loại nhịp độ trận đấu
+                if (real_v_e > 450.0) real_closingFast = true; // Địch đang lao nhanh
+                else if (real_v_e < 350.0) real_closingFast = false;
+            } else {
+                real_v_e = 0.0;
+                real_closingFast = false;
             }
-        } 
-        else if (current_time - last_kinematic_time > 150) { 
-            // Reset Kinematics nếu ToF mù quá lâu
-            tempData.v_e = 0.0;
-            tempData.closingFast = false;
-            tempData.isTargetLost = true;
+            
+            // Tính toán Intercept Point để tạt sườn
+            // Tính thời gian cần để chạy vòng qua sườn địch (t_robot) so với thời gian địch lao tới (t_enemy)
+            float alpha = tempData.enemy_angle;
+            float x_e = d * sin(alpha * M_PI / 180.0);
+            float y_e = d * cos(alpha * M_PI / 180.0);
+            // Tạo Projection Point bên hông địch
+            float x_p = x_e + R_SIDE * sin((alpha - 90.0) * M_PI / 180.0);
+            float y_p = y_e + R_SIDE * cos((alpha - 90.0) * M_PI / 180.0);
+            float l_path = sqrt(x_p * x_p + y_p * y_p);
+            float theta_target = atan2(x_p, y_p) * 180.0 / M_PI;
+            
+            real_t_robot = (fabsf(theta_target) / OMEGA_60) + (l_path / V_MAX_60);
+            real_t_enemy = (real_v_e < 5.0) ? 9999.0 : (R_SIDE / real_v_e);
+            if (d <= DIST_CLOSE || tempData.isTargetLost) {
+                condition_flank_met = false; // Quá gần, không kịp tạt nữa
+            } else { // Mếu đến được điểm sườn nhanh hơn địch lao tới ngã 3 + khoảng T_MARGIN an toàn
+                condition_flank_met = ((real_t_robot + T_MARGIN) < real_t_enemy);
+            }
+
+            prev_d = d;
+            last_kinematic_time = current_time;
         }
+    } 
+    else if (current_time - last_kinematic_time > 150) { 
+        // Reset Kinematics nếu ToF mù quá lâu
+        real_v_e = 0.0;
+        real_closingFast = false;
+        tempData.isTargetLost = true;
+    }
+
+    // Đẩy static data vào tempData (cho buffer hiện tại)
+    tempData.v_e = real_v_e;
+    tempData.closingFast = real_closingFast;
+    tempData.t_robot = real_t_robot;
+    tempData.t_enemy = real_t_enemy;
+    tempData.v_0 = getEstimatedVelocity(tempData.current_PWM);
 
         // DEBOUNCE CỜ TẠT SƯỜN - CHỐNG TÍN HIỆU CHẬP CHỜN
         static uint32_t last_flk_true_time = 0;
@@ -442,11 +452,13 @@ void TaskSensorCode(void * pvParameters) {
             float v_raw = -(sim_in_dist[0] - prev_sim_d0) / dt; 
             
             // Lọc nhiễu nhẹ để số v_e khỏi nhảy loạn xạ khi tay bạn kéo slider giật cục
-            tempData.v_e = (0.3 * v_raw) + (0.7 * tempData.v_e);
+            sim_v_e = (0.3 * v_raw) + (0.7 * sim_v_e);
             prev_sim_d0 = sim_in_dist[0];
             
             last_sim_time = current_time;
         }
+        
+        tempData.v_e = sim_v_e;
 
         // Bơm data từ biến toàn cục vào buffer của xe
         tempData.dist[0] = sim_in_dist[0];
