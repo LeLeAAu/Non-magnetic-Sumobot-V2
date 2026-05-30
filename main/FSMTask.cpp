@@ -164,8 +164,15 @@ void TaskFSMCode(void * pvParameters) {
                         if (localData.dist[0] < CONF_ENY) { // Địch trước mặt
                             enterState(STATE_ATK_LOCK); // Lock
                             DEBUG_PRINTLN(">>> DELAY XONG: ĐỊCH NGAY TRƯỚC MẶT -> LOCK!");
-                        } else {
+
+                        else if (localData.dist[1] < CONF_ENY || localData.dist[2] < CONF_ENY ||
+                                localData.dist[3] < CONF_ENY || localData.dist[4] < CONF_ENY) {
+                            enterState(STATE_ATK_FLANK_SIDE);
+                            DEBUG_PRINTLN(">>> DELAY XONG: ĐỊCH BÊN CẠNH -> FLANK_SIDE!");
+                        }
+                        else {
                             enterState(STATE_SEARCH_ENEMY);
+                            float target_angle = getModeAngle(angle_histogram, HIST_SIZE);
                             if (target_angle != 999.0) { // Xoay robot về góc đã ghi nhớ
                                 Serial.print(">>> DELAY XONG: TÌM KIẾM THEO GÓC GHI NHỚ: ");
                                 DEBUG_PRINTLN(target_angle);
@@ -498,6 +505,13 @@ void TaskFSMCode(void * pvParameters) {
                     }
                 }
 
+                // Phát hiện bế tắc: địch sát mặt nhưng không tiến triển
+                if (localData.dist[0] < 150 && fabsf(localData.v_e) < 50 && elapsed_time > 500) {
+                    enterState(STATE_ATK_STRIKE);
+                    DEBUG_PRINTLN(">>> LOCK STALEMATE -> FORCE STRIKE!");
+                    break;
+                }
+
                 // KIỂM TRA ĐIỀU KIỆN RA ĐÒN
                 bool is_ready_to_strike = false;
                 if (localData.dist[0] < WARN_DIST && fabsf(err_angle) <= ANGLE_WIDE) {
@@ -545,6 +559,13 @@ void TaskFSMCode(void * pvParameters) {
                     200, 
                     700
                 );
+
+                // Ưu tiên cao: tránh rơi khỏi sàn
+                if (localData.edgeDetect && localData.dist[0] < WARN_DIST) {
+                    enterState(STATE_DEF_EDGE_AVOID);
+                    DEBUG_PRINTLN(">>> LOCK: EDGE RISK -> AVOID!");
+                    break;
+                }
                 
                 // KIỂM SOÁT TIMEOUT CỰC ĐOAN (Bế tắc vật lý - Giữ nguyên)
                 if (elapsed_time > ATK_LOCK_TIME) {

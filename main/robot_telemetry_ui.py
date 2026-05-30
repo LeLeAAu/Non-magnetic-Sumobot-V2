@@ -46,6 +46,8 @@ PARAM_NAMES = {
     12: 'ATK_LOCK_TIME (ms)',
 }
 
+
+
 # CRC16-CCITT
 def crc16_ccitt(data):
     crc = 0xFFFF
@@ -107,6 +109,9 @@ class RobotTelemetryUI:
         self.setup_plot_tab()
         self.setup_param_tab()
 
+        self.recording = False
+        self.record_data = []
+
     #Tab Serial
     def setup_serial_tab(self):
         ttk.Label(self.serial_frame, text="Cổng COM:").grid(row=0, column=0, padx=5, pady=5)
@@ -116,11 +121,32 @@ class RobotTelemetryUI:
         ttk.Button(self.serial_frame, text="Ngắt kết nối", command=self.disconnect_serial).grid(row=0, column=3, padx=5)
         self.status_label = ttk.Label(self.serial_frame, text="Chưa kết nối", foreground="red")
         self.status_label.grid(row=1, column=0, columnspan=4, pady=10)
+        ttk.Button(self.serial_frame, text="Record", command=self.start_record).grid(row=3, column=0)
+        ttk.Button(self.serial_frame, text="Stop", command=self.stop_record).grid(row=3, column=1)
+        ttk.Button(self.serial_frame, text="Load CSV", command=self.load_csv).grid(row=3, column=2)
 
         # Khung hiển thị trạng thái hiện tại
         self.state_text = tk.StringVar(value="State: --")
         ttk.Label(self.serial_frame, textvariable=self.state_text, font=('Arial', 12)).grid(row=2, column=0, columnspan=4)
 
+
+    def start_record(self):
+        self.recording = True
+        self.record_data = []
+
+    def stop_record(self):
+        self.recording = False
+        if self.record_data:
+            import csv
+            with open("telemetry_log.csv", "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["timestamp", "dist0", "enemy_angle", "v_e", "state"])
+                writer.writerows(self.record_data)
+            print("Saved to telemetry_log.csv")
+
+    def load_csv(self):
+        # mở file CSV và hiển thị lại đồ thị (có thể dùng matplotlib)
+        pass
     def get_serial_ports(self):
         return [port.device for port in serial.tools.list_ports.comports()]
 
@@ -263,6 +289,9 @@ class RobotTelemetryUI:
                        "RECOVER","SEARCH"]
         state_str = state_names[state] if state < len(state_names) else f"UNK({state})"
         self.root.after(0, lambda: self.state_text.set(f"State: {state_str} | v_e: {v_e:.1f} mm/s"))
+
+        if self.recording:
+            self.record_data.append([ts, dist[0], enemy_angle, v_e, state])
 
     def process_param_response(self, payload):
         # payload: list of (param_id:2, value:4) repeated
