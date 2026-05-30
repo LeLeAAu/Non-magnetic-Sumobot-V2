@@ -133,11 +133,13 @@ class RobotTelemetryUI:
         # Hàm tạo slider dọc
         def create_v_slider(parent, label, max_val):
             frame = ttk.Frame(parent)
-            # Dùng tk.Scale thay vì ttk.Scale để dễ dàng hiển thị số và kéo
-            var = tk.IntVar()
+            var = tk.IntVar(value=max_val) # Khởi tạo ở giá trị Max
+            
+            # troughcolor='#202020' tạo rãnh màu đen, sliderrelief='raised' làm nổi con trượt
             slider = tk.Scale(frame, from_=max_val, to=0, orient="vertical", 
                               variable=var, length=250, tickinterval=max_val, 
-                              showvalue=True, width=20, sliderrelief='flat')
+                              showvalue=True, width=20, sliderrelief='raised',
+                              troughcolor='#202020', bg='#f0f0f0', activebackground='gray')
             slider.pack()
             ttk.Label(frame, text=label).pack(pady=5)
             return frame, var
@@ -187,8 +189,21 @@ class RobotTelemetryUI:
         # 2. Text STATE (Ở giữa)
         state_container = ttk.Frame(bottom_frame)
         state_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.state_large_label = ttk.Label(state_container, text="STATE:\n--", font=('Arial', 24, 'bold'), justify='left')
-        self.state_large_label.pack(expand=True)
+        self.state_large_label = ttk.Label(state_container, text="STATE:\n--\n\nV0=\nVe=", font=('Arial', 24, 'bold'), justify='left')
+        self.state_large_label.pack(expand=True, anchor='w')
+
+        # Thêm cụm "Bị đâm phía:"
+        impact_frame = ttk.Frame(state_container)
+        impact_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
+        ttk.Label(impact_frame, text="Bị đâm phía:", font=('Arial', 18)).grid(row=0, column=0, columnspan=2, sticky='w')
+        
+        self.impact_inds = {}
+        dirs = [("Trái", 1, 0), ("Trên", 1, 1), ("Phải", 2, 0), ("Dưới", 2, 1)]
+        for name, r, c in dirs:
+            # Tạo ô vuông giống đèn LED
+            lbl = tk.Label(impact_frame, text=name, bg="gray", width=6, height=2, fg="white", font=('Arial', 12, 'bold'), relief="sunken")
+            lbl.grid(row=r, column=c, padx=5, pady=5)
+            self.impact_inds[name] = lbl
 
         # 3. Slider TCRT_DETECT (Bên phải)
         detect_container, self.slider_vars["detect"] = create_v_slider(bottom_frame, "TCRT_DETECT", 4096)
@@ -219,20 +234,43 @@ class RobotTelemetryUI:
         self.ttp_btn.config(bg="red", relief="raised")
         self.ttp_lbl_status.config(text="OFF")
         
-    def update_ui_elements(self, dist, line, enemy_angle, v_e, state_str, tcrt_detect_val):
-        # Hàm này sẽ được gọi bằng self.root.after để chạy trên main thread
+    def safe_update_ui(self, ts, enemy_angle, dist, line, v_e, v_0, state_str, tcrt_detect_val, flags):
+        # 1. Thao tác mảng an toàn tuyệt đối trên UI Thread
+        self.telemetry_data['timestamp'].append(ts)
+        self.telemetry_data['enemy_angle'].append(enemy_angle)
 
-        # Cập nhật Label
-        self.state_large_label.config(text=f"STATE:\n{state_str}\n\nv_e: {v_e:.1f}")
-        self.state_text.set(f"State: {state_str} | v_e: {v_e:.1f} mm/s")
+        if len(self.telemetry_data['timestamp']) > self.max_points:
+            self.telemetry_data['timestamp'] = self.telemetry_data['timestamp'][-self.max_points:]
+            self.telemetry_data['enemy_angle'] = self.telemetry_data['enemy_angle'][-self.max_points:]
 
-        # Cập nhật Plot
-        t = list(range(len(self.telemetry_data['timestamp'])))
+        # 2. Cập nhật Text V0 và Ve
+        self.state_large_label.config(text=f"STATE:\n{state_str}\n\nV0= {v_0:.1f} mm/s\nVe= {v_e:.1f} mm/s")
+        self.state_text.set(f"State: {state_str} | Ve: {v_e:.1f} | V0: {v_0:.1f}")
+
+        # 3. Cập nhật Đồ thị
+        t = self.telemetry_data['timestamp']
         if t:
             self.line_angle.set_data(t, self.telemetry_data['enemy_angle'])
             self.ax_angle.relim()
             self.ax_angle.autoscale_view()
             self.canvas.draw_idle()
+
+        # 4. Logic nháy đèn báo đâm
+        is_impact = (flags & 0x10) != 0 # Check bit impactDetected (0x10)
+        
+        # Reset màu tất cả về xám
+        for name in self.impact_inds: self.impact_inds[name].config(bg="gray", relief="sunken")
+        
+        if is_impact:
+            # Phân tích hướng đâm dưa trên cảm biến ToF đang báo nguy hiểm (< 350mm)
+            if dist[3] < 350: # d3 là trái
+                self.impact_inds["Trái"].config(bg="#ff5500", relief="raised")
+            elif dist[4] < 350: # d4 là phải
+                self.impact_inds["Phải"].config(bg="#ff5500", relief="raised")
+            elif dist[0] < 350: # d0 là mặt trước
+                self.impact_inds["Trên"].config(bg="#ff5500", relief="raised")
+            else: # Điểm mù ở mông
+                self.impact_inds["Dưới"].config(bg="#ff5500", relief="raised")
 
 
     # CÁC TAB CÒN LẠI & LOGIC
@@ -370,14 +408,14 @@ class RobotTelemetryUI:
         line = struct.unpack('<4H', payload[14:14+8])
         enemy_angle = struct.unpack('<f', payload[22:26])[0]
         v_e = struct.unpack('<f', payload[26:30])[0]
+        v_0 = struct.unpack('<f', payload[30:34])[0]
         state = payload[42]
+        flags = payload[43]
         
         # Dữ liệu TCRT Detect chưa có trong Telemetry struct cũ, 
         # Tạm lấy line[0] làm minh hoạ, nếu firmware bạn thêm tcrt_detect thì thay vào đây
         tcrt_detect_val = line[0] 
 
-        self.telemetry_data['timestamp'].append(ts)
-        self.telemetry_data['enemy_angle'].append(enemy_angle)
 
         if len(self.telemetry_data['timestamp']) > self.max_points:
             self.telemetry_data['timestamp'] = self.telemetry_data['timestamp'][-self.max_points:]
@@ -390,8 +428,8 @@ class RobotTelemetryUI:
         state_str = state_names[state] if state < len(state_names) else f"UNK({state})"
 
         # Gọi hàm update UI trên main thread
-        self.root.after(0, lambda: self.update_ui_elements(dist, line, enemy_angle, v_e, state_str, tcrt_detect_val))
-
+        self.root.after(0, lambda: self.safe_update_ui(ts, enemy_angle, dist, line, v_e, state_str, tcrt_detect_val))
+        self.root.after(0, lambda: self.safe_update_ui(ts, enemy_angle, dist, line, v_e, v_0, state_str, tcrt_detect_val, flags))
         if self.recording:
             self.record_data.append([ts, dist[0], enemy_angle, v_e, state])
 
