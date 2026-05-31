@@ -81,3 +81,28 @@ Công tắc bập bênh KCD1 cho là 3g
 Các tụ điện điện trở cho là 20g
 Dây dợ không rõ.
 
+No-load
+	Rated Voltage: 12V
+	RPM 260
+	Current 0.3A
+Rated-load
+	RPM 200
+	Current 1.6A
+	Torque 5kg.cm
+	Power 19.2W
+Stall
+	Torque 25kg.cm
+	Current 6.5A
+Starting voltage 2V
+
+Input Voltage: 6 ~ 27Vdc.
+Driver: Dual BTS7960 H Bridge Configuration.
+Peak current: 43-Amp.
+PWM capability of up to 25 kHz.
+Control Input Level: 3.3~5V.
+Control Mode: PWM or level
+Working Duty Cycle: 0 ~100%.
+Over-voltage Lock Out.
+Under-voltage Shut Down.
+
+Bánh xe 65mm

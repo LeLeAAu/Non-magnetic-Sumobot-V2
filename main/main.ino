@@ -12,19 +12,19 @@
 
 // NO ANTI_PUSH. LOGIC này chỉ có tác dụng với mấy con Sumobot magnetic bên nhật thôi.
 
+// KHÔNG THÊM CÁC STATE RETREAT. Hãy tập trung vào các logic tấn công
+
 // Vấn đề:
 /*
 
-- Nếu gặp đối thủ mạnh hơn hoặc ngang bằng -> STATE_ANTI_PUSH khá vô dụng for some reason
-- ATK_STRIKE -> ATK_STALEMATE mà không sang STATE_ANTI_PUSH
 
 */
 
 
 //Todo
 /*
-
-
+- Nâng cấp các trạng thái tấn công, tập trung vào tấn công
+- làm một cái kiểu -> Ngay khi vào -> tính toán trong init -> nếu xác nhận được địch ở đâu thì cứ chạy một đoạn -> xoay thẳng bot về phía địch -> đâm - và chỉ flank đúng lần đầu đấy - 
 
 -
 */

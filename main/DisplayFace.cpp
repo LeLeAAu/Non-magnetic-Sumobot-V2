@@ -9,15 +9,53 @@ void drawCurrentFace() {
     display.setTextSize(4);
     display.setTextColor(SSD1306_WHITE);
     
-    if (currentState == STATE_ATK_LOCK) display.setCursor(28, 0), display.print("O.O");
-    else if (currentState == STATE_SEARCH_ENEMY) display.setCursor(28, 0), display.print("-_-");
-    else if (currentState == STATE_REC_RECOVER) display.setCursor(28, 0), display.print("@_@");
-    else if (currentState == STATE_ATK_STALEMATE_BRAKE) display.setCursor(22, 0), display.print("=_=");
-    else if (currentState == STATE_DEF_LAST_STAND) display.setCursor(22, 0), display.print("T_T");
-    else if (currentState == STATE_ATK_FLANK_FRONT || currentState == STATE_ATK_FLANK_SIDE || currentState == STATE_ATK_FLANK_REAR) display.setCursor(22, 0), display.print("OwO");
-    else if (currentState == STATE_ATK_STRIKE || currentState == STATE_ATK_LIFT || currentState == STATE_ATK_DELAY_RUSH || currentState == STATE_ATK_FEINT) display.setCursor(22, 0), display.print("MwM");
-    else if (currentState >= STATE_DEF_ANTI_PUSH && currentState <= STATE_DEF_ANTI_LIFT) display.setCursor(28, 0), display.print(">_<");
-    
+    int curX = 28; // Tọa độ X mặc định
+    const char* face = "";
+
+    // Phân loại biểu cảm cực kì rõ ràng bằng Switch-case, 
+    // không sợ bị lỗi nếu sau này đảo lộn thứ tự Enum trong Config.h
+    switch (currentState) {
+        // Nhóm quan sát, dò tìm
+        case STATE_SEARCH_ENEMY:
+            curX = 28; face = "-_-"; break;
+        case STATE_ATK_LOCK:
+            curX = 28; face = "O.O"; break;
+
+        // Nhóm phục hồi, mất phương hướng
+        case STATE_REC_RECOVER:
+            curX = 28; face = "@_@"; break;
+
+        // Nhóm bế tắc, giằng co
+        case STATE_ATK_STALEMATE_BRAKE:
+            curX = 22; face = "=_="; break;
+
+        // Nhóm tuyệt vọng, rớt đài, lỗi phần cứng
+        case STATE_DEF_LAST_STAND:
+            curX = 22; face = "T_T"; break;
+
+        // Nhóm tấn công bạo lực, dồn ép
+        case STATE_ATK_STRIKE:
+        case STATE_ATK_LIFT:
+        case STATE_ATK_DELAY_RUSH:
+        case STATE_ATK_FEINT:
+            curX = 22; face = "MwM"; break;
+
+        // Nhóm phòng thủ, né tránh khẩn cấp (Bao trọn các thủ sườn, thủ đít, né vạch mới thêm)
+        case STATE_DEF_ANTI_PUSH: // Cứ giữ tên ở đây dù bạn có bỏ logic hay không
+        case STATE_DEF_SIDE_GUARD:
+        case STATE_DEF_REAR_GUARD:
+        case STATE_DEF_EDGE_AVOID:
+        case STATE_DEF_ANTI_LIFT:
+            curX = 28; face = ">_<"; break;
+
+        // Các trạng thái mặc định như IDLE, CALIBRATION... đã có chữ ở main.ino lo
+        default: 
+            return; // Không in mặt gì cả
+    }
+
+    // In khuôn mặt ra OLED
+    display.setCursor(curX, 0);
+    display.print(face);
     display.display();
 }
 

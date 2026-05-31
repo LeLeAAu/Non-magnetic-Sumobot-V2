@@ -79,6 +79,11 @@ void TaskSensorCode(void * pvParameters) {
         // Đọc trực tiếp giá trị PWM từ Core 1 gửi sang thông qua biến Atomic riêng biệt
         tempData.current_PWM = active_pwm.load();
 #if !SIMULATION_MODE
+        static float real_v_e = 0.0f;
+        static bool real_closingFast = false;
+        static float real_t_robot = 0.0f;
+        static float real_t_enemy = 9999.0f;
+
         // TOÀN BỘ LOGIC CẢM BIẾN THẬT
         bool has_new_tof = false;
         
@@ -160,10 +165,7 @@ void TaskSensorCode(void * pvParameters) {
 
         // TÍNH TOÁN ĐỘNG HỌC CHU KÌ ~40ms
         float dt_kinematic = (current_time - last_kinematic_time) / 1000.0;
-        static float real_v_e = 0.0f;
-        static bool real_closingFast = false;
-        static float real_t_robot = 0.0f;
-        static float real_t_enemy = 9999.0f;
+        
 
         if (dt_kinematic >= 0.040) { 
             static float prev_d = 8190.0;

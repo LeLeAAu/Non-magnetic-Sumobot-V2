@@ -13,10 +13,10 @@
 // 0: SILENT MODE - Dành cho thi đấu thực tế (Tắt toàn bộ Serial, tối ưu hiệu năng 100%)
 // 1: EVENT MODE - Chỉ in các sự kiện quan trọng (Chuyển State, Lỗi phần cứng ngắt hệ thống)
 // 2: VERBOSE MODE - In chi tiết tất cả thông số sensor, kinematics mỗi 500ms (Dùng khi test tại xưởng)
-#define DEBUG_LEVEL 2
+#define DEBUG_LEVEL 0
 
 // Chế độ mô phỏng (bỏ qua phần cứng thật, tự sinh dữ liệu)
-#define SIMULATION_MODE 1   // 1 = bật, 0 = tắt
+#define SIMULATION_MODE 0  // 1 = bật, 0 = tắt
 
 #define CALIBRATION_MODE 0  // 1: Bật chế độ đo đạc tĩnh (Khóa động cơ), 0: Chế độ thi đấu
 
@@ -147,8 +147,7 @@ extern const uint8_t VLX_ADDRESSES[5];
 // Định nghĩa các trạng thái FSM
 enum RobotState {
     STATE_IDLE, STATE_INIT_DELAY,
-    STATE_ATK_STRIKE, STATE_ATK_FLANK_FRONT, STATE_ATK_FLANK_SIDE, 
-    STATE_ATK_FLANK_REAR, STATE_ATK_LIFT, STATE_ATK_FEINT, 
+    STATE_ATK_STRIKE, STATE_ATK_LIFT, STATE_ATK_FEINT, 
     STATE_ATK_DELAY_RUSH, STATE_ATK_LOCK, STATE_ATK_STALEMATE_BRAKE,
     STATE_DEF_ANTI_PUSH, STATE_DEF_SIDE_GUARD, STATE_DEF_REAR_GUARD, 
     STATE_DEF_EDGE_AVOID, STATE_DEF_ANTI_LIFT, STATE_DEF_LAST_STAND,
