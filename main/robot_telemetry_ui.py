@@ -422,9 +422,9 @@ class RobotTelemetryUI:
             self.telemetry_data['enemy_angle'] = self.telemetry_data['enemy_angle'][-self.max_points:]
 
         state_names = ["IDLE","INIT_DELAY","STRIKE","FLANK_FRONT","FLANK_SIDE","FLANK_REAR",
-                       "ATK_LIFT","FEINT","DELAY_RUSH","LOCK","BRAKE","ANVIL_BRK",
+                       "ATK_LIFT","FEINT","DELAY_RUSH","LOCK","STALEMATE_BRAKE",
                        "ANTI_PUSH","SIDE_GUARD","REAR_GUARD","EDGE_AVOID","ANTI_LIFT",
-                       "LAST_STAND","RECOVER","SEARCH"]
+                       "LAST_STAND","RECOVER","SEARCH","CALIBRATION"]
         state_str = state_names[state] if state < len(state_names) else f"UNK({state})"
 
         # Gọi hàm update UI trên main thread

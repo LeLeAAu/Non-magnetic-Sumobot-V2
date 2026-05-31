@@ -1,21 +1,20 @@
 #include "Config.h"
 // Constants và Thresholds
 // --- Khoảng cách (mm) ---
-volatile uint16_t CONF_ENY = 1000;      // min distance xác nhận có đối thủ (tạm gán 1000mm)
-volatile uint16_t WARN_DIST = 350;      // ngưỡng cảnh báo đối thủ ở cự ly nguy hiểm
-volatile uint16_t STRIKE_DIST = 250;    // khoảng cách bung lực tấn công (dành riêng cho d0)
+volatile uint16_t CONF_ENY = 1300;      // min distance xác nhận có đối thủ (tạm gán 1000mm)
+volatile uint16_t WARN_DIST = 550;      // ngưỡng cảnh báo đối thủ ở cự ly nguy hiểm
+volatile uint16_t STRIKE_DIST = 450;    // khoảng cách bung lực tấn công (dành riêng cho d0)
 
 // --- Thời gian (ms) ---
 const uint32_t MIN_STT_TIME = 50;    // thời gian tối thiểu giữ 1 state
 const uint32_t PUSH_MS = 500;        // thời gian bơm xung lực đẩy
 const uint32_t HOLD_PUSH_MS = 500;   // thời gian duy trì lực đẩy sau xung đầu
-const uint32_t TIMEOUT_MAX = 1400;   // timeout chờ tối đa
-volatile uint32_t ATK_LOCK_TIME = 500;  // thời gian tối đa trong STATE_ATK_LOCK
+const uint32_t TIMEOUT_MAX = 500;    // timeout chờ tối đa
+volatile uint32_t ATK_LOCK_TIME = 250;  // thời gian tối đa trong STATE_ATK_LOCK
 
 // --- Guard / Safety (ms) ---
 const uint32_t SIDE_DANGER_TIME = 80;   // thời gian tối thiểu d báo < WARN_DIST để chốt sideDanger
 const uint32_t FLK_STABLE_TIME = 100;   // thời gian flkPossible phải giữ TRUE liên tục
-const uint32_t IGNORE_ANTI_PUSH = 200;  // thời gian mù bỏ qua IMU sau khi ra đòn đẩy
 const uint32_t EDGE_TIMEOUT = 300;      // thời gian phải sạch vạch trắng trước khi thoát RECOVER
 const uint32_t MAX_RECOVER_TIME = 800;  // thời gian tối đa cho 1 phase RECOVER
 const uint32_t FLK_DEBOUNCE_TIME = 30;  // Thời gian ân hạn (chống dội) khi mất điều kiện tạt sườn
@@ -33,7 +32,7 @@ const float BOT_HALF_WIDTH = 80.0;      // Nửa chiều rộng bot (mm) - Tùy 
 const float R_SIDE_MARGIN = 50.0;       // Khoảng cách an toàn margin (mm)
 const float R_SIDE = BOT_HALF_WIDTH + R_SIDE_MARGIN;
 const float PITCH_TH = 8.5;         // Ngưỡng góc nghiêng (độ) để xác định xe bị hất/rơi
-const float ACC_IMPACT_TH = 1.2;     // Ngưỡng gia tốc (G) để nhận diện va chạm mạnh
+const float ACC_IMPACT_TH = 0.45;     // Ngưỡng gia tốc (G) để nhận diện va chạm mạnh
 const float SENSOR_SIN[5] = {0.0, -0.7071, 0.7071, -1.0, 1.0}; // Lookup table
 const float SENSOR_COS[5] = {1.0,  0.7071, 0.7071,  0.0, 0.0}; // Lookup table
 const float V_EMA_ALPHA = 0.25;         // Hệ số lọc EMA cho vận tốc tiếp cận (0.0 -> 1.0)
@@ -60,7 +59,7 @@ volatile float KP_STEERING = 4.0;  // Hệ số tỉ lệ điều hướng
 const float ANGLE_SLOPPY = 30.0; // Góc lệch tối đa (vẫn cho phép ủi) khi đã rúc sát gầm địch
 
 const uint16_t DIST_BLIND = 2000; // Khoảng cách coi như mù
-const uint16_t DIST_CLOSE = 150;  // Vùng tử thần áp sát gầm
+const uint16_t DIST_CLOSE = 300;  // Vùng tử thần áp sát gầm
 
 const uint8_t MEDIAN_WINDOW = 3; // Lọc Median cho cảm biến khoảng cách
 

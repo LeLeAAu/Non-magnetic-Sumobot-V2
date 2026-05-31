@@ -60,7 +60,7 @@ void TaskFSMCode(void * pvParameters) {
         uint32_t lost_duration = (target_lost_start_time > 0) ? (fsm_current_time - target_lost_start_time) : 0;
 
         // Global Safety layer
-        bool is_self_jerk_blind_time = (fsm_current_time - state_start_time < 250);
+        bool is_self_jerk_blind_time = (fsm_current_time - state_start_time < 80);
 
         if (currentState != STATE_IDLE && currentState != STATE_INIT_DELAY) {
 
@@ -104,24 +104,24 @@ void TaskFSMCode(void * pvParameters) {
             else if (localData.impactDetected && !is_self_jerk_blind_time && 
                      currentState != STATE_ATK_STRIKE && 
                      currentState != STATE_ATK_LIFT &&
-                     currentState != STATE_DEF_ANTI_PUSH &&
                      currentState != STATE_DEF_REAR_GUARD &&
                      currentState != STATE_DEF_SIDE_GUARD) {
                 
                 // Phân tích hướng bị đâm dựa trên việc ToF có đang bị mù hay không
                 bool blind_hit = (localData.dist[0] > WARN_DIST && localData.dist[1] > WARN_DIST && 
                                   localData.dist[2] > WARN_DIST && localData.dist[3] > WARN_DIST && localData.dist[4] > WARN_DIST);
-                bool side_hit = (localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST);
+                bool side_hit = (localData.dist[3] < DIST_CLOSE || localData.dist[4] < DIST_CLOSE);
 
                 if (blind_hit) {
                     enterState(STATE_DEF_REAR_GUARD); // Đâm từ điểm mù -> Thủ sau
                     DEBUG_PRINTLN(">>> GLOBAL SAFETY: BLIND IMPACT -> REAR GUARD!");
-                } else if (side_hit && currentState == STATE_SEARCH_ENEMY) {
+                } else if (side_hit && (currentState == STATE_SEARCH_ENEMY || currentState == STATE_ATK_FLANK_SIDE)) {
                     enterState(STATE_DEF_SIDE_GUARD); // Đâm ngang hông -> Thủ sườn
                     DEBUG_PRINTLN(">>> GLOBAL SAFETY: SIDE IMPACT -> SIDE GUARD!");
-                } else {
-                    enterState(STATE_DEF_ANTI_PUSH); // Mặc định: giằng co chính diện
-                    DEBUG_PRINTLN(">>> GLOBAL SAFETY: FRONT IMPACT -> ANTI_PUSH!");
+                } else if (localData.dist[0] < DIST_CLOSE || localData.dist[1] < DIST_CLOSE || localData.dist[2] < DIST_CLOSE) {
+                    // Mặc định: Bị đâm từ phía trước -> TỔNG TẤN CÔNG!
+                    enterState(STATE_ATK_STRIKE); 
+                    DEBUG_PRINTLN(">>> GLOBAL SAFETY: FRONT IMPACT -> COUNTER STRIKE!");
                 }
             }
         }
@@ -180,7 +180,7 @@ void TaskFSMCode(void * pvParameters) {
                     }
                 }
 
-                if (fsm_current_time - state_start_time >= 3000) { // Hết 3s đếm ngược -> Đưa ra quyết định
+                if (fsm_current_time - state_start_time >= 0) { // Đã bỏ 3s đếm ngược theo yêu cầu -> Đưa ra quyết định ngay lập tức
                         float target_angle = getModeAngle(angle_histogram, HIST_SIZE); 
                         
                         if (localData.dist[0] < CONF_ENY) { // Địch trước mặt
@@ -209,55 +209,75 @@ void TaskFSMCode(void * pvParameters) {
             // NHÓM 2: PHÒNG THỦ VÀ PHỤC HỒI
             case STATE_DEF_EDGE_AVOID:
             {
-                static uint32_t clean_edge_time = 0;
-                static int esc_l = -PWM_MAX, esc_r = -PWM_MAX; 
+                int esc_l = 0;
+                int esc_r = 0;
+                // 1. LIÊN TỤC CẬP NHẬT TRẠNG THÁI SENSOR ĐỂ NÉ VẠCH
+                bool ignore_front = (localData.pitch > PITCH_TH); 
+                bool ignore_rear  = (localData.pitch < -PITCH_TH);
 
-                // Chốt hướng né ngay khoảnh khắc đầu tiên nhảy vào State
-                if (state_just_entered) {
+                bool edge_FL = (!ignore_front) && (localData.line[0] <= TCRT_EDGE_TH);
+                bool edge_FR = (!ignore_front) && (localData.line[1] <= TCRT_EDGE_TH);
+                bool edge_BL = (!ignore_rear)  && (localData.line[2] <= TCRT_EDGE_TH);
+                bool edge_BR = (!ignore_rear)  && (localData.line[3] <= TCRT_EDGE_TH);
+
+                if (localData.edgeDetect) {
+                    // CẤP ĐỘ 1: MATADOR DODGE (Né đòn ủi thẳng mặt ở sát mép)
+                    if (localData.dist[0] < WARN_DIST || localData.closingFast) {
+                        if (edge_FL || edge_BL) { esc_l = -PWM_MED; esc_r = -PWM_MAX; } 
+                        else { esc_l = -PWM_MAX; esc_r = -PWM_MED; }                    
+                    } 
+                    // CẤP ĐỘ 2: TẬN THẾ TIER (Giẫm 3-4 mắt)
+                    else if ((edge_FL && edge_FR && edge_BL) || (edge_FL && edge_FR && edge_BR)) {
+                        esc_l = -PWM_MAX; esc_r = -PWM_MAX;
+                    }
+                    else if ((edge_BL && edge_BR && edge_FL) || (edge_BL && edge_BR && edge_FR)) {
+                        esc_l = PWM_MAX; esc_r = PWM_MAX;
+                    }
+                    // CẤP ĐỘ 3: THOÁT HIỂM CƠ BẢN
+                    else {
+                        if (edge_FL && edge_FR) { esc_l = -PWM_MAX; esc_r = -PWM_MAX; } 
+                        else if (edge_BL && edge_BR) { esc_l = PWM_MAX; esc_r = PWM_MAX; } 
+                        else if (edge_FL && edge_BR) { esc_l = -PWM_MAX; esc_r = -PWM_MED; } 
+                        else if (edge_FR && edge_BL) { esc_l = -PWM_MED; esc_r = -PWM_MAX; } 
+                        else if (edge_FL) { esc_l = -PWM_HIGH; esc_r = -PWM_MAX; } 
+                        else if (edge_FR) { esc_l = -PWM_MAX; esc_r = -PWM_HIGH; } 
+                        else if (edge_BL) { esc_l = PWM_HIGH; esc_r = PWM_MAX; }   
+                        else if (edge_BR) { esc_l = PWM_MAX; esc_r = PWM_HIGH; }   
+                        else { esc_l = -PWM_MAX; esc_r = -PWM_MAX; } 
+                    }
                     
-                    // Áp dụng lại lớp mặt nạ (Masking) y hệt Core 0 cho góc nghiêng để bỏ qua cảnh báo giả
-                    bool ignore_front = (localData.pitch > PITCH_TH); 
-                    bool ignore_rear  = (localData.pitch < -PITCH_TH);
-
-                    bool edge_FL = (!ignore_front) && (localData.line[0] <= TCRT_EDGE_TH);
-                    bool edge_FR = (!ignore_front) && (localData.line[1] <= TCRT_EDGE_TH);
-                    bool edge_BL = (!ignore_rear)  && (localData.line[2] <= TCRT_EDGE_TH);
-                    bool edge_BR = (!ignore_rear)  && (localData.line[3] <= TCRT_EDGE_TH);
-
-                    // Logic phán đoán không còn bị lừa bởi báo động giả
-                    // Xoay nhẹ (Dùng PWM_PIVOT) thay vì lùi hết ga (PWM_MAX)
-                    if (edge_FL && edge_FR) { esc_l = -PWM_PIVOT; esc_r = -PWM_LOW; } // Mũi dính -> Lùi vòng phải nhẹ
-                    else if (edge_BL && edge_BR) { esc_l = PWM_PIVOT; esc_r = PWM_LOW; } // Đít dính -> Tiến vòng phải nhẹ
-                    else if (edge_FL && edge_BR) { esc_l = -PWM_PIVOT; esc_r = PWM_PIVOT; } // Chéo 1 -> Xoay tại chỗ lùi
-                    else if (edge_FR && edge_BL) { esc_l = PWM_PIVOT; esc_r = -PWM_PIVOT; } // Chéo 2 -> Xoay tại chỗ tiến
-                    else if (edge_FL) { esc_l = -PWM_PIVOT; esc_r = -PWM_LOW; } // Trái dính -> Lùi vòng phải nhẹ
-                    else if (edge_FR) { esc_l = -PWM_LOW; esc_r = -PWM_PIVOT; } // Phải dính -> Lùi vòng trái nhẹ
-                    else if (edge_BL) { esc_l = PWM_PIVOT; esc_r = PWM_LOW; }   // Đít trái dính -> Tiến vòng phải nhẹ
-                    else if (edge_BR) { esc_l = PWM_LOW; esc_r = PWM_PIVOT; }   // Đít phải dính -> Tiến vòng trái nhẹ
-                    else { esc_l = -PWM_PIVOT; esc_r = -PWM_LOW; } // Fallback: Lùi vòng phải nhẹ
+                    // Xuất lực ra động cơ né vạch
+                    driveBot(esc_l, esc_r);
+                }
+                // 2. SẠCH VẠCH HOÀN TOÀN -> BỎ HẲN DEEP PULL, QUYẾT ĐỊNH STATE MỚI NGAY LẬP TỨC
+                else {
+                    if (localData.dist[0] < WARN_DIST) {
+                        // Thay vì chuyển thẳng sang STRIKE (đâm ga tới đột ngột làm tăng dòng hộc và dễ trượt bánh),
+                        // đưa về LOCK để tính toán góc steering bám đuổi mịn hơn hoặc setup đòn Counter-Rush.
+                        enterState(STATE_ATK_LOCK);
+                        DEBUG_PRINTLN(">>> EDGE CLEARED -> TARGET IN FRONT -> LOCK");
+                    } else {
+                        // Nếu trống trải, đẩy thẳng qua RECOVER. 
+                        // Logic lùi chữ J (J-Turn) có sẵn trong RECOVER sẽ tự động làm nhiệm vụ đưa xe hướng về tâm sàn đấu một cách linh hoạt.
+                        enterState(STATE_REC_RECOVER);
+                        DEBUG_PRINTLN(">>> EDGE CLEARED -> DISENGAGE TO RECOVER");
+                    }
                 }
 
-                // Liên tục bơm PWM đã chốt
-                driveBot(esc_l, esc_r);
-
-                if (!localData.edgeDetect) { // Điều kiện thoát:
-                    if (clean_edge_time == 0) clean_edge_time = fsm_current_time;
-                    if (fsm_current_time - clean_edge_time >= EDGE_TIMEOUT) { // Không quét thấy vạch trắng liên tục trong khoảng EDGE_TIMEOUT
-                        clean_edge_time = 0;
-                        if (localData.dist[0] < WARN_DIST) {
-                            enterState(STATE_ATK_STRIKE);
-                            DEBUG_PRINTLN(">>> SAFE: EDGE CLEARED -> ĐỊCH Ở TRƯỚC MẶT -> STRIKE!");
-                        } else {
-                            enterState(STATE_SEARCH_ENEMY);
-                            DEBUG_PRINTLN(">>> SAFE: EDGE CLEARED -> SEARCH");
-                        }
-                    }
-                } else {
-                    clean_edge_time = 0; // Nếu trễ một tí lại thấy vạch trắng -> xoá bộ đếm
+                // Ngắt khẩn cấp khi bị đâm văng trong lúc đang né vạch
+                if (fsm_current_time - state_start_time > 80 && localData.impactDetected) {
+                    enterState(STATE_ATK_STRIKE);
+                    DEBUG_PRINTLN(">>> EDGE AVOID INTERRUPT: BỊ ĐÂM LÚC ĐANG NÉ -> TẤN CÔNG NƯỚC RÚT!");
+                    break;
+                }
+                            
+                // TIMEOUT FIX: Tránh lặp vô tận (Stuck prevention)
+                if (fsm_current_time - state_start_time > 600) {
+                    enterState(STATE_SEARCH_ENEMY);
+                    DEBUG_PRINTLN(">>> EDGE AVOID STUCK! -> FORCE SEARCH");
                 }
                 break;
             }
-
             case STATE_DEF_LAST_STAND: // Khi xe bị lật nghiêng hoặc sắp rớt đài
             {
                 if (localData.pitch < -PITCH_TH) driveBot(-PWM_MAX, -PWM_MAX); 
@@ -285,79 +305,128 @@ void TaskFSMCode(void * pvParameters) {
             {
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
 
-                // Nếu bị hếch mũi -> Lùi (-). Nếu bị hếch đít -> Tiến (+)
+                // Mặc định: Hếch mũi -> lùi (-), Hếch đít -> tiến (+)
                 int escape_pwm = localData.liftedFront ? -PWM_MAX : PWM_MAX; 
-                int jiggle_pwm = localData.liftedFront ? -PWM_JIGGLE : PWM_JIGGLE;
+                
+                // 1. TỰ CỨU MẠNG: CHỐNG RỚT ĐÀI OAN
+                // Bị hếch mũi (đang lùi) mà đít giẫm vạch -> Tràn ga tiến tới!
+                if (localData.liftedFront && (localData.line[2] <= TCRT_EDGE_TH || localData.line[3] <= TCRT_EDGE_TH)) {
+                    escape_pwm = PWM_MAX; 
+                    DEBUG_PRINTLN(">>> ANTI_LIFT: EDGE REAR DETECTED -> FORCE FORWARD!");
+                }
+                // Bị hếch đít (đang tiến) mà mũi giẫm vạch -> Tràn ga lùi kịch!
+                else if (localData.liftedRear && (localData.line[0] <= TCRT_EDGE_TH || localData.line[1] <= TCRT_EDGE_TH)) {
+                    escape_pwm = -PWM_MAX;
+                    DEBUG_PRINTLN(">>> ANTI_LIFT: EDGE FRONT DETECTED -> FORCE REVERSE!");
+                }
 
-                // Đánh võng hướng ngược lại cái nêm của địch
-                if (elapsed_time < 200) {
-                    driveBot(escape_pwm, escape_pwm); 
+                // 2. KỊCH BẢN THOÁT GẦM CƯỜNG ĐỘ CAO
+                if (elapsed_time < 150) {
+                    driveBot(escape_pwm, escape_pwm); // Xả full ga giật ra khỏi gầm
                 } 
-                else if (elapsed_time < 800) { // Lắc lư trái phải liên tục
-                    int phase = ((elapsed_time - 200) / 100) % 2; 
-                    if (phase == 0) driveBot(escape_pwm, jiggle_pwm); 
-                    else driveBot(jiggle_pwm, escape_pwm);            
+                else if (elapsed_time < 500) { 
+                    // Tăng tần số giật lên 50ms/pha. Tạo độ chênh lực gắt (255 vs 100) để văng đuôi
+                    int phase = ((elapsed_time - 150) / 50) % 2; 
+                    int weak_pwm = (escape_pwm > 0) ? 100 : -100; 
+                    
+                    if (phase == 0) driveBot(escape_pwm, weak_pwm); 
+                    else driveBot(weak_pwm, escape_pwm);            
                 } 
                 else {
-                    driveBot(escape_pwm * 0.8, escape_pwm * 0.8); // Xả ga đều (200)
+                    // DESPERATE PHASE: Vặn xoắn thân xe để phá vỡ cấu trúc cân bằng của nêm địch
+                    driveBot(escape_pwm, -escape_pwm); 
                 }
 
-                // ĐIỀU KIỆN THOÁT 1: Xe đã hạ xuống sàn thành công
+                // 3. ĐIỀU KIỆN THOÁT (Có bộ lọc nhiễu IMU)
+                static uint32_t safe_ground_time = 0;
                 if (!localData.liftedFront && !localData.liftedRear && fabsf(localData.pitch) <= 5.0 && fabsf(localData.roll) <= 5.0) {
-                    enterState(STATE_REC_RECOVER);
-                    DEBUG_PRINTLN(">>> THOÁT KHỎI GẦM ĐỊCH -> RECOVERING!");
+                    if (safe_ground_time == 0) safe_ground_time = fsm_current_time;
+                    
+                    // Phải bám đất ổn định 150ms mới tính là thoát hẳn
+                    if (fsm_current_time - safe_ground_time > 150) {
+                        enterState(STATE_REC_RECOVER);
+                        safe_ground_time = 0;
+                        DEBUG_PRINTLN(">>> THOÁT KHỎI GẦM ĐỊCH -> RECOVERING!");
+                    }
+                } else {
+                    safe_ground_time = 0; // Hủy đếm nếu xe lại bị giật nảy
                 }
                 
-                // ĐIỀU KIỆN THOÁT 2 (TIMEOUT)
-                else if (elapsed_time > 1200) {
-                    enterState(STATE_DEF_LAST_STAND); // Chuyển sang trạng thái rớt đài
+                // 4. TIMEOUT XUỐNG LAST_STAND (Kéo dài thêm để xe có thời gian giãy)
+                if (elapsed_time > 800) {
+                    enterState(STATE_DEF_LAST_STAND); 
                     DEBUG_PRINTLN(">>> ANTI_LIFT BẾ TẮC -> LAST STAND!");
                 }
                 
                 break;
             }
 
-            case STATE_DEF_ANTI_PUSH: // Bị đâm mạnh từ phía trước
-            {
-                uint32_t elapsed_time = fsm_current_time - state_start_time;
-
-                if (elapsed_time < 100) driveBot(0, 0); // Phanh cứng lại để cản lực đâm ban đầu
-                else if (elapsed_time < 300) driveBot(-PWM_MAX, -PWM_MAX); // Giật lùi hết cỡ tạo khoảng cách
-                else if (elapsed_time < 600) {
-                    // Dao động zíc-zắc có chu kỳ (50ms mỗi pha)
-                    int phase = (elapsed_time / 50) % 2; 
-                    
-                    if (phase == 0) {
-                        driveBot(-200, -PWM_PIVOT); // Lắc mạnh đuôi sang trái
-                    } else {
-                        driveBot(-PWM_PIVOT, -200); // Lắc mạnh đuôi sang phải
-                    }
-                } 
-                else {
-                    enterState(STATE_REC_RECOVER);
-                    DEBUG_PRINTLN(">>> ANTI_PUSH DONE -> RECOVERING");
-                }
-                break;
-            }
 
             case STATE_DEF_SIDE_GUARD:
             {
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
-                static int escape_dir = 1;
+                static int turn_dir = 1;
 
-                // Bắt Entry Action 1 lần duy nhất khi mới vào State
+                // ENTRY ACTION: Xác định hướng địch ngay khoảnh khắc bị áp sát
                 if (state_just_entered) {
-                    escape_dir = (esp_random() & 1) ? 1 : -1; // + NGẫu nhiên hướng
-                } 
+                    // Nếu enemy_angle âm (hoặc mắt trái d3 thấy gần hơn), địch ở bên Trái -> turn_dir = -1
+                    turn_dir = (localData.enemy_angle < 0 || localData.dist[3] < localData.dist[4]) ? -1 : 1;
+                }
 
-                if (elapsed_time < 300) driveBot(PWM_MAX * escape_dir, PWM_MAX * escape_dir);
+                // SAFETY NET: Cắt đứt chuỗi lùi nếu đạp vạch trắng
+                if (localData.edgeDetect) {
+                    enterState(STATE_DEF_EDGE_AVOID);
+                    DEBUG_PRINTLN(">>> SIDE_GUARD INTERRUPT: EDGE DETECTED!");
+                    break;
+                }
+
+                // PHẢN XẠ SỚM: Tránh xoay quá đà (overshoot) lướt qua mặt địch
+                // Nếu trong lúc xoay mà mắt trước (d0) đã bắt được địch -> Khóa ngay!
+                if (elapsed_time > 50 && localData.dist[0] < WARN_DIST) {
+                    enterState(STATE_ATK_LOCK);
+                    DEBUG_PRINTLN(">>> SIDE_GUARD EARLY EXIT -> ENEMY FRONT -> ATK_LOCK");
+                    break;
+                }
+
+                // PHASE 1: J-Turn (Lùi cua mượn lực) trong 200ms
+                if (elapsed_time < 200) {
+                    if (turn_dir == -1) {
+                        // Địch bên Trái -> Bánh Trái lùi kịch sàn, Phải lùi vừa -> Mũi xe quay sang Trái
+                        driveBot(-PWM_MAX, -PWM_MED);
+                    } else {
+                        // Địch bên Phải -> Bánh Phải lùi kịch sàn, Trái lùi vừa -> Mũi xe quay sang Phải
+                        driveBot(-PWM_MED, -PWM_MAX);
+                    }
+                } 
+                // PHASE 2: Pivot tại chỗ để bắt chết góc
+                else if (elapsed_time < 350) {
+                    if (turn_dir == -1) {
+                        driveBot(-PWM_MAX, PWM_MAX); // Xoay gắt mũi sang Trái
+                    } else {
+                        driveBot(PWM_MAX, -PWM_MAX); // Xoay gắt mũi sang Phải
+                    }
+                } 
+                // PHASE 3: Kết thúc cơ động, đánh giá tình hình
                 else {
                     if (localData.dist[0] < WARN_DIST) {
-                        enterState(STATE_ATK_LOCK);
-                        DEBUG_PRINTLN(">>> SIDE_GUARD -> ENEMY FRONT -> ATK_LOCK");
-                    } else {
+                        enterState(STATE_ATK_LOCK); // Đã xoay trúng mặt, tiến hành khóa mục tiêu
+                        DEBUG_PRINTLN(">>> SIDE_GUARD SUCCESS -> ENEMY FRONT -> ATK_LOCK");
+                    } 
+                    else if (localData.dist[3] < DIST_CLOSE || localData.dist[4] < DIST_CLOSE) {
+                        // Kẻ địch bám dai như đỉa, cả 2 đang nhảy điệu Walz xoay tròn (Stalemate).
+                        // Phá thế: Lùi gắt để bứt quỹ đạo thay vì đứng xoay.
                         enterState(STATE_REC_RECOVER);
-                        DEBUG_PRINTLN(">>> SIDE_GUARD -> RECOVERING");
+                        DEBUG_PRINTLN(">>> SIDE_GUARD STUCK (NASH EQUILIBRIUM) -> BREAK ORBIT!");
+                    }
+                    else if (localData.dist[1] < CONF_ENY || localData.dist[2] < CONF_ENY || 
+                             localData.dist[3] < CONF_ENY || localData.dist[4] < CONF_ENY) {
+                        // Địch nằm ở hông nhưng đã bị đẩy ra xa (d > DIST_CLOSE) -> Phản công
+                        enterState(STATE_ATK_FLANK_SIDE);
+                        DEBUG_PRINTLN(">>> SIDE_GUARD -> ENEMY MOVED AWAY -> FLANK_SIDE");
+                    }
+                    else {
+                        enterState(STATE_SEARCH_ENEMY); // Hụt đòn thực sự, mù
+                        DEBUG_PRINTLN(">>> SIDE_GUARD DONE -> SEARCHING");
                     }
                 }
                 break;
@@ -369,33 +438,41 @@ void TaskFSMCode(void * pvParameters) {
                 static int turn_dir = 1;
                 static float start_yaw = 0.0;
 
-                // Xác định hướng lượn vòng dực vào góc bị đâm sau đít
+                // ENTRY ACTION: Xác định hướng xoay để đối mặt ngay với đối thủ
                 if (state_just_entered) {
-                    // Nếu enemy_angle < 0 (Nửa trái), lượn sang Phải (turn_dir = 1)
-                    turn_dir = (localData.enemy_angle < 0) ? 1 : -1;
+                    // Nếu enemy_angle < 0 (Nửa trái), xoay gắt sang Trái (turn_dir = -1) để đưa mặt lại nhanh nhất
+                    turn_dir = (localData.enemy_angle < 0) ? -1 : 1;
                     start_yaw = localData.yaw;
                 }
 
-                // Xoay cho đến khi góc lệch đạt 180 độ (xoay ngược lại 180 độ)
+                // 1. PHẢN XẠ SỚM: Nếu trong lúc xoay mà mắt trước (d0) đã bắt được địch
+                if (localData.dist[0] < WARN_DIST) {
+                    enterState(STATE_ATK_LOCK);
+                    DEBUG_PRINTLN(">>> REAR_GUARD: ĐÃ ĐỐI MẶT ĐỊCH -> ATK_LOCK!");
+                    break;
+                }
+
+                // 2. VÒNG LẶP XOAY GẮT (PIVOT TẠI CHỖ)
+                // Theo dõi IMU để xoay cho đến khi góc lệch đạt 180 độ
                 if (fabsf(localData.yaw - start_yaw) < 180.0) {
-                    // Lượn vòng: 1 bánh full ga, 1 bánh giảm ga
-                    if (turn_dir == 1) driveBot(PWM_MAX, 150); 
-                    else driveBot(150, PWM_MAX);
+                    // Pivot tại chỗ: 1 bánh tiến full ga, 1 bánh lùi full ga
+                    driveBot(PWM_MAX * turn_dir, -PWM_MAX * turn_dir);
                     
-                    // Timeout dự phòng nếu xe bị kẹt không xoay được
+                    // Timeout dự phòng nếu xe bị kẹt lực ma sát với đối thủ không xoay được
                     if (elapsed_time > 800) {
                         enterState(STATE_REC_RECOVER);
                         DEBUG_PRINTLN(">>> REAR_GUARD TIMEOUT (STUCK) -> RECOVERING");
                     }
                 } 
                 else {
-                    // Đã xoay đủ 180 độ
-                    if (localData.flkPossible) {
-                        enterState(STATE_ATK_FLANK_REAR);
-                        DEBUG_PRINTLN(">>> REAR_GUARD (180deg) -> TURN TO FLANK REAR");
+                    // Đã xoay đủ 180 độ nhưng địch đã lách đi chỗ khác (hụt d0)
+                    if (localData.dist[1] < CONF_ENY || localData.dist[2] < CONF_ENY || 
+                        localData.dist[3] < CONF_ENY || localData.dist[4] < CONF_ENY) {
+                        enterState(STATE_ATK_FLANK_SIDE);
+                        DEBUG_PRINTLN(">>> REAR_GUARD (180deg) -> THẤY ĐỊCH BÊN HÔNG -> FLANK SIDE");
                     } else {
-                        enterState(STATE_REC_RECOVER);
-                        DEBUG_PRINTLN(">>> REAR_GUARD (180deg) -> RECOVERING");
+                        enterState(STATE_SEARCH_ENEMY);
+                        DEBUG_PRINTLN(">>> REAR_GUARD (180deg) -> MẤT DẤU -> SEARCHING");
                     }
                 }
                 break;
@@ -412,10 +489,10 @@ void TaskFSMCode(void * pvParameters) {
                      search_dir = (localData.enemy_angle < 0) ? -1 : 1; // Ưu tiên quay về phía vừa mất dấu
                 }
 
-                if (elapsed_time < 1000) {
+                if (elapsed_time < 600) {
                     driveBot(150 * search_dir, -150 * search_dir); // Xoay tại chỗ quét nhanh
                 } 
-                else if (elapsed_time < 3000) {
+                else if (elapsed_time < 1500) {
                     driveBot(200 * search_dir, 50 * search_dir);  // Quét vòng cung rộng
                 } 
                 else {
@@ -428,16 +505,16 @@ void TaskFSMCode(void * pvParameters) {
 
                 // Tìm thấy mục tiêu
                 if (localData.dist[0] < CONF_ENY) {
-                    // Cự ly nguy hiểm -> Bỏ qua ngắm nghía, ATK
-                    if (localData.dist[0] <= WARN_DIST) {
+                    // Nếu địch ở gần HOẶC địch đang lao tới tốc độ cao -> BỎ QUA LOCK, STRIKE LUÔN!
+                    if (localData.dist[0] <= WARN_DIST || localData.closingFast) {
                         enterState(STATE_ATK_STRIKE);
-                        DEBUG_PRINTLN(">>> SEARCH: ĐỊCH Ở GẦN (< WARN_DIST) -> RUSH LUÔN BỎ QUA LOCK!");
+                        DEBUG_PRINTLN(">>> SEARCH: ĐỊCH LAO NHANH / Ở GẦN -> RUSH BỎ QUA LOCK!");
                     } else {
                         enterState(STATE_ATK_LOCK);
                         DEBUG_PRINTLN(">>> SEARCH: FOUND IN FRONT (FAR) -> LOCK");
                     }
                 }
-                else if (localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST) {
+                else if (localData.dist[3] < DIST_CLOSE || localData.dist[4] < DIST_CLOSE) {
                     // Địch áp sát ngang hông (d3, d4) ở cự ly nguy hiểm -> Kích hoạt thoát hiểm tạt sườn
                     enterState(STATE_DEF_SIDE_GUARD);
                     DEBUG_PRINTLN(">>> SEARCH: DANGER AT DIRECT SIDE (d3/d4) -> SIDE GUARD EVASION!");
@@ -453,33 +530,86 @@ void TaskFSMCode(void * pvParameters) {
 
             case STATE_REC_RECOVER:
             {
-                static int random_turn_dir = 1; 
+                static int turn_dir = 1; 
+                static uint32_t dynamic_jturn_time = 150;
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
 
-                // Bắt Entry Action
+                // ENTRY ACTION
                 if (state_just_entered) {
-                    random_turn_dir = (esp_random() & 1) ? 1 : -1;
+                    turn_dir = (!localData.isTargetLost && localData.enemy_angle < 0) ? -1 : 1;
+                    if (localData.isTargetLost) turn_dir = (esp_random() & 1) ? 1 : -1;
+
+                    // Scale thời gian lùi tối đa dựa vào vận tốc đối thủ
+                    if (fabsf(localData.v_e) < 50.0) dynamic_jturn_time = 100;
+                    else if (localData.closingFast) dynamic_jturn_time = 150;
+                    else dynamic_jturn_time = 120;
                 }
 
-                if (elapsed_time < 300) driveBot(-200, -200);
-                else if (elapsed_time < MAX_RECOVER_TIME) driveBot(150 * random_turn_dir, -150 * random_turn_dir);
+                // 1. EARLY EXIT 1: BỊ HÚC VĂNG KHI ĐANG LÙI (Chống bị đẩy lùi)
+                if (elapsed_time > 60 && localData.impactDetected) {
+                    enterState(STATE_ATK_STRIKE);
+                    DEBUG_PRINTLN(">>> RECOVER INTERRUPT: BỊ ĐÂM LÚC ĐANG LÙI -> BUNG MAX LỰC CẢN LẠI!");
+                    break;
+                }
 
-                if (elapsed_time >= 300) {
-                    if (localData.dist[0] < WARN_DIST) {
-                        enterState(STATE_ATK_LOCK);
-                        DEBUG_PRINTLN(">>> RECOVER INT: ENEMY FRONT -> ATK_LOCK");
-                    } 
-                    else if (localData.dist[1] < WARN_DIST || localData.dist[2] < WARN_DIST || 
-                             localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST) {
-                        enterState(STATE_ATK_FLANK_SIDE);
-                        DEBUG_PRINTLN(">>> RECOVER INT: ENEMY SIDE -> FLANK_SIDE");
+                // 2. EARLY EXIT 2: RỦI RO RỚT ĐÀI TỪ ĐUÔI (Quét liên tục từ 0ms)
+                if (elapsed_time < dynamic_jturn_time) {
+                    // Đạp vạch đuôi -> Phải dừng lùi ngay để không rớt đài
+                    if (localData.line[2] <= TCRT_EDGE_TH || localData.line[3] <= TCRT_EDGE_TH) {
+                        dynamic_jturn_time = elapsed_time; 
+                        DEBUG_PRINTLN(">>> RECOVER: REAR EDGE RISK -> CUT J-TURN!");
                     }
                 }
 
+                // 3. EARLY EXIT 3: PHẢN CÔNG CHỚP NHOÁNG (Chỉ quét sau 60ms)
+                if (elapsed_time > 60) {
+                    // Thấy địch chính diện trong tầm nguy hiểm -> Đâm ngay
+                    if (localData.dist[0] < WARN_DIST) {
+                        enterState(STATE_ATK_LOCK);
+                        DEBUG_PRINTLN(">>> RECOVER REFLEX: TARGET IN FRONT -> LOCK & ENGAGE!");
+                        break;
+                    }
+                    // Thấy địch hở sườn -> Tạt ngay
+                    else if (localData.dist[1] < WARN_DIST || localData.dist[2] < WARN_DIST || 
+                            localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST) {
+                        enterState(STATE_ATK_FLANK_SIDE);
+                        DEBUG_PRINTLN(">>> RECOVER REFLEX: TARGET AT SIDE -> FLANK!");
+                        break;
+                    }
+                    // ToF báo không gian đã quá trống trải (>600mm) -> Ngừng lùi, xoay xe tìm góc
+                    else if (localData.dist[0] > 600 && elapsed_time < dynamic_jturn_time) {
+                        dynamic_jturn_time = elapsed_time;
+                        DEBUG_PRINTLN(">>> RECOVER: SPACE CLEARED -> PIVOT NOW!");
+                    }
+                }
+
+                // 4. EARLY EXIT 4: MÙ LÀ ĐỊCH Ở SAU LƯNG (Chống đánh lén)
+                // Sau khi kết thúc lùi chữ J và bắt đầu xoay được 100ms mà vẫn không thấy ai -> Khẳng định địch bám đuôi!
+                if (elapsed_time > dynamic_jturn_time + 100) {
+                    if (localData.isTargetLost) {
+                        enterState(STATE_DEF_REAR_GUARD);
+                        DEBUG_PRINTLN(">>> RECOVER BLIND: KHÔNG THẤY AI CẢ -> ĐỊCH Ở SAU LƯNG -> REAR GUARD!");
+                        break;
+                    }
+                }
+
+                // 5. ĐIỀU KHIỂN MOTOR 
+                // Phase 1 (0 -> dynamic_jturn_time): Lùi chữ J bẻ trục tấn công
+                if (elapsed_time < dynamic_jturn_time) {
+                    if (turn_dir == 1) driveBot(-PWM_MAX, -PWM_MED); 
+                    else driveBot(-PWM_MED, -PWM_MAX);
+                }
+                // Phase 2 (dynamic_jturn_time -> MAX_RECOVER_TIME): Xoay Pivot tại chỗ tìm địch
+                else if (elapsed_time < MAX_RECOVER_TIME) {
+                    driveBot(PWM_MED * turn_dir, -PWM_MED * turn_dir);
+                }
+
+                // --- 6. TIMEOUT DỰ PHÒNG ---
                 if (elapsed_time >= MAX_RECOVER_TIME) {
                     enterState(STATE_SEARCH_ENEMY);
                     DEBUG_PRINTLN(">>> RECOVER TIMEOUT -> SEARCH");
                 }
+                
                 break;
             }
 
@@ -518,6 +648,22 @@ void TaskFSMCode(void * pvParameters) {
                     break;
                 }
 
+                // THOÁT KHẨN CẤP KHI GÓC QUÁ GẮT (> 60 ĐỘ)
+                // Nếu địch đã lọt ra khỏi hình nón phía trước, việc xoay tại chỗ là tự sát.
+                if (fabsf(localData.enemy_angle) > 60.0) {
+                    // Nếu địch áp sát sườn -> Tung bài lùi chữ J thủ sườn
+                    if (localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST) {
+                        enterState(STATE_DEF_SIDE_GUARD);
+                        DEBUG_PRINTLN(">>> LOCK BAILOUT: ĐỊCH SÁT HÔNG (>60 độ) -> J-TURN THỦ SƯỜN!");
+                    } 
+                    // Nếu địch ở xa -> Kích hoạt cơ động bọc lót tạt sườn
+                    else {
+                        enterState(STATE_ATK_FLANK_SIDE);
+                        DEBUG_PRINTLN(">>> LOCK BAILOUT: ĐỊCH NGOÀI TẦM NGẮM (>60 độ) -> ĐÁNH CHẶN SƯỜN!");
+                    }
+                    break;
+                }
+
                 // ĐIỀU HƯỚNG MỤC TIÊU VÀO CHÍNH DIỆN
                 float err_angle = localData.enemy_angle; 
                 int forward_pwm = 0;
@@ -550,13 +696,29 @@ void TaskFSMCode(void * pvParameters) {
                     break;
                 }
 
+                // TÍNH TOÁN KHOẢNG CÁCH TẤN CÔNG ĐỘNG
+                uint16_t dynamic_strike_dist = STRIKE_DIST; 
+
+                if (localData.closingFast) {
+                    // Nếu địch cũng đang rồ ga lao tới -> Kích hoạt đòn húc từ XA (vd: 650mm) 
+                    // để lấy đà và đón lõng
+                    dynamic_strike_dist = 650; 
+                } else if (localData.v_e < 50.0) {
+                    // Nếu địch lỳ đòn đứng im hoặc đang lùi -> Phải rúc vào GẦN (vd: 350mm) 
+                    // mới được bung lực để tránh bị lừa đòn
+                    dynamic_strike_dist = 350; 
+                }
+
                 // KIỂM TRA ĐIỀU KIỆN RA ĐÒN
                 bool is_ready_to_strike = false;
-                if (localData.dist[0] < WARN_DIST && fabsf(err_angle) <= ANGLE_WIDE) {
+                if (localData.dist[0] < dynamic_strike_dist && fabsf(err_angle) <= ANGLE_WIDE) {
                     is_ready_to_strike = true;
                 } 
-                else if (localData.dist[0] < DIST_CLOSE && fabsf(err_angle) <= ANGLE_SLOPPY) {
-                    is_ready_to_strike = true; // Gần sát rồi, lệch góc cũng ủi luôn
+                else if (localData.dist[0] < DIST_CLOSE && fabsf(err_angle) <= ANGLE_WIDE) {
+                    // Tuyệt đối không được STRIKE. Ép nó tạt hông hoặc vờn trước mặt để bắt lại góc thẳng!
+                    enterState(STATE_ATK_FLANK_FRONT); 
+                    DEBUG_PRINTLN(">>> LOCK WARNING: QUÁ GẦN NHƯNG LỆCH GÓC NẶNG -> FLANK FRONT ĐỂ TRƯỢT SƯỜN!");
+                    break;
                 }
 
                 if (is_ready_to_strike) {
@@ -569,12 +731,12 @@ void TaskFSMCode(void * pvParameters) {
                             DEBUG_PRINTLN(">>> LOCK SUCCESS -> ENEMY RUSHING -> DELAY RUSH!");
                         } 
                         else {
-                            // PHÁ THẾ BÁM SÀN (ANVIL) HOẶC TACTICAL FEINT
+                            // PHÁ THẾ BÁM SÀN HOẶC TACTICAL FEINT
                             if (failed_strike_count >= 2 || lock_retries >= 2) {
                                 if (fabsf(localData.v_e) < 50.0) {
-                                    // Địch lỳ đòn, vận tốc cực nhỏ -> Kích hoạt Anvil Breaker
-                                    enterState(STATE_ATK_ANVIL_BREAKER);
-                                    DEBUG_PRINTLN(">>> ANVIL DETECTED (LOW V_E) -> ANVIL BREAKER!");
+                                    // Địch lỳ đòn, vận tốc cực nhỏ -> Đưa thẳng về RECOVER
+                                    enterState(STATE_REC_RECOVER);
+                                    DEBUG_PRINTLN(">>> LOW V_E DETECTED -> RECOVER!");
                                 } else {
                                     // Địch vẫn di chuyển nhanh -> Lừa đòn
                                     enterState(STATE_ATK_FEINT);
@@ -591,12 +753,12 @@ void TaskFSMCode(void * pvParameters) {
                     }
                 }
 
-                // KIỂM SOÁT TIMEOUT ĐỘNG THEO CỰ LY
-                uint32_t current_lock_timeout = constrain(
-                    map(localData.dist[0], 200, 1500, 200, 700), 
-                    200, 
-                    700
-                );
+                // Bổ sung: Thoát khẩn cấp sang tạt sườn nếu địch hoàn toàn ở bên hông (90 độ) mà trước mặt trống
+                if (localData.dist[0] >= CONF_ENY && (localData.dist[3] < CONF_ENY || localData.dist[4] < CONF_ENY)) {
+                    enterState(STATE_ATK_FLANK_SIDE);
+                    DEBUG_PRINTLN(">>> LOCK: ENEMY AT 90 DEG AND FRONT EMPTY -> BAILOUT TO FLANK_SIDE!");
+                    break;
+                }
 
                 // Ưu tiên cao: tránh rơi khỏi sàn
                 if (localData.edgeDetect && localData.dist[0] < WARN_DIST) {
@@ -622,26 +784,37 @@ void TaskFSMCode(void * pvParameters) {
 
             case STATE_ATK_STRIKE:
             {
-                // CHuỗi ra đòn
+                // Chuỗi ra đòn
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
 
+                // Pha 1: Bắn tốc độ ép xung ban đầu
                 if (elapsed_time < PUSH_MS) {
-                    driveBot(PWM_MAX, PWM_MAX); // Xung lực tối đa (Bắn tốc)
+                    driveBot(PWM_MAX, PWM_MAX); 
                 } 
-                else if (elapsed_time < PUSH_MS + HOLD_PUSH_MS) {
-                    driveBot(220, 220); // Duy trì áp lực
-                } 
+                // Pha 2: BRAKE-STEER (Móc góc gầm bằng phanh cơ khí)
                 else {
-                    driveBot(200, 200); // Theo xe, tránh trượt bánh (Wheel slip)
+                    // Địch có xu hướng lách/trượt sang trái -> Phanh trái, xả phải để xoáy lưỡi ủi móc gầm
+                    if (localData.enemy_angle < -4.0) {
+                        driveBot(0, PWM_MAX); 
+                    } 
+                    // Địch trượt sang phải -> Phanh phải, xả trái
+                    else if (localData.enemy_angle > 4.0) {
+                        driveBot(PWM_MAX, 0); 
+                    } 
+                    // Địch ngay giữa -> Duy trì áp lực tịnh tiến
+                    else {
+                        driveBot(PWM_STRIKE_HOLD, PWM_STRIKE_HOLD); 
+                    }
                 }
 
-                // CHECK PHẢN CÔNG (ANTI-PUSH) TỪ ĐỐI THỦ
-                // Đủ mù (IGNORE_ANTI_PUSH) để không tự kích hoạt do gia tốc của chính mình
-                if (elapsed_time > IGNORE_ANTI_PUSH) {
-                    if (localData.sideDanger == true && localData.impactDetected == true) {
-                        enterState(STATE_DEF_ANTI_PUSH); 
-                        DEBUG_PRINTLN(">>> STRIKE BLOCKED: ANTI_PUSH TRIGGERED!");
-                        break; 
+                // KỊCH BẢN TRƯỢT GÓC (GLANCING BLOW / SLIPPED)
+                // Đang đẩy nhưng góc lệch to, tức là xe đang bị văng sườn
+                if (elapsed_time > 500) { // Tăng lên 500ms để bao trọn thời gian tiếp cận và va chạm
+                    if (fabsf(localData.enemy_angle) > 25.0) {
+                        enterState(STATE_ATK_LOCK);
+                        failed_strike_count++; 
+                        DEBUG_PRINTLN(">>> S>>> STRIKE SLIPPED -> BÁM LẠI GÓC!");
+                        break;
                     }
                 }
 
@@ -653,32 +826,19 @@ void TaskFSMCode(void * pvParameters) {
                     break;
                 }
 
-                // ĐIỀU KIỆN THOÁT (HỤT ĐÒN HOẶC MẤT GÓC)
-                // - Hụt mục tiêu do đối thủ lùi nhanh hơn hoặc bị hất văng: dist > WARN_DIST
-                // - Lệch góc quá nhiều: angle > 20 độ
-                if (localData.dist[0] > WARN_DIST || fabsf(localData.enemy_angle) > 20.0) {
-                    // Nếu đẩy hụt mà v_e < 50, nghĩa là địch đang lỳ đòn và ta tự trượt góc -> Fail
-                    if (localData.v_e < 50.0) failed_strike_count++; 
-                    
-                    enterState(STATE_ATK_LOCK); 
-                    DEBUG_PRINTLN(">>> STRIKE SLIP/AWAY -> RE-LOCK");
-                    break;
-                }
-
                 // STALEMATE
                 // Nếu hai xe đang húc nhau giằng co quá lâu (vượt TIMEOUT_MAX),
-                // Việc ủi thẳng mãi sẽ làm cháy động cơ/tuột bánh răng.
-                // Giải pháp: Kích hoạt tự hãm của Worm Gear bằng cách phanh cứng 0 PWM.
+                // Kích hoạt tự hãm của Worm Gear bằng cách phanh cứng 0 PWM.
                 if (elapsed_time > TIMEOUT_MAX) {
-                    // Giằng co hết 1.4s mà v_e < 50 -> Địch bám sàn quá tốt -> Fail
+                    // Giằng co hết thời gian mà v_e < 50 -> Địch bám sàn quá tốt -> Fail
                     if (localData.v_e < 50.0) failed_strike_count++; 
                     
                     enterState(STATE_ATK_STALEMATE_BRAKE);
                     DEBUG_PRINTLN(">>> STALEMATE TIMEOUT -> WORM GEAR BRAKE (STAND YOUR GROUND)!");
                 }
 
-        break;
-      } 
+                break;
+            }
             case STATE_ATK_STALEMATE_BRAKE: // Khoá cứng động cơ Worm Gear, lợi dụng cơ khí trục vít tự hãm
             {
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
@@ -693,13 +853,14 @@ void TaskFSMCode(void * pvParameters) {
                         // Địch vẫn lù lù trước mặt -> Tăng biến đếm bế tắc
                         stalemate_cycles++; 
                         
-                        if (stalemate_cycles >= 5) {
-                            // Đã húc nhau 5 nhịp (hơn 6 giây) không kết quả -> phá thế
-                            stalemate_cycles = 0;
-                            enterState(STATE_REC_RECOVER); // Giật lùi nhanh và xoay tìm góc đánh sườn
-                            DEBUG_PRINTLN(">>> STALEMATE BROKEN -> FALLBACK TO RECOVER!");
+                        // --- LOGIC MỚI: TỔNG TẤN CÔNG PHÁ BẾ TẮC ---
+                        if (stalemate_cycles >= 2) {
+                            stalemate_cycles = 0; 
+                            
+                            // Địch lỳ quá? Không lùi, mà tung đòn tạt sườn góc hẹp để xé rách thăng bằng của chúng
+                            enterState(STATE_ATK_FLANK_FRONT); 
+                            DEBUG_PRINTLN(">>> STALEMATE BROKEN -> ENEMY TOO STRONG -> SHIFTING TO FLANK FRONT!");
                         } else {
-                            // Đánh tiếp
                             enterState(STATE_ATK_STRIKE);
                             DEBUG_PRINTLN(">>> BRAKE DONE -> RE-STRIKE!");
                         }
@@ -740,6 +901,13 @@ void TaskFSMCode(void * pvParameters) {
 
             case STATE_ATK_FLANK_SIDE:
             {
+                // Bổ sung: Thoát khẩn cấp sang thủ sườn nếu địch áp quá sát hông trước khi xảy ra va chạm
+                if (localData.dist[3] < DIST_CLOSE || localData.dist[4] < DIST_CLOSE) {
+                    enterState(STATE_DEF_SIDE_GUARD);
+                    DEBUG_PRINTLN(">>> FLANK_SIDE: ENEMY TOO CLOSE TO SIDE -> SIDE GUARD EVASION!");
+                    break;
+                }
+
                 uint16_t min_left = min(localData.dist[1], localData.dist[3]);
                 uint16_t min_right = min(localData.dist[2], localData.dist[4]);
                 
@@ -915,53 +1083,6 @@ void TaskFSMCode(void * pvParameters) {
                 
                 break;
             }
-
-            case STATE_ATK_ANVIL_BREAKER:
-            {
-                uint32_t elapsed_time = fsm_current_time - state_start_time;
-                static int turn_dir = 1;
-
-                // Xác định hướng tạt sườn dựa trên vị trí địch ở khoảnh khắc bắt đầu
-                if (state_just_entered) {
-                    turn_dir = (localData.enemy_angle < 0) ? -1 : 1; 
-                }
-
-                // Phase 1: Giật lùi nhanh trong 100ms để tạo không gian
-                if (elapsed_time < 100) {
-                    driveBot(-PWM_MAX, -PWM_MAX); 
-                } 
-                // Phase 2: Tạt sườn cung rộng (45 độ)
-                else if (elapsed_time < 500) { 
-                    if (turn_dir == 1) {
-                        driveBot(180, 50); // Lượn sang phải
-                    } else {
-                        driveBot(50, 180); // Lượn sang trái
-                    }
-                } 
-                // Phase 3: Kết thúc lượn, kiểm tra lại tình hình
-                else {
-                    if (localData.dist[0] < WARN_DIST) {
-                        enterState(STATE_ATK_STRIKE);
-                        DEBUG_PRINTLN(">>> ANVIL BREAKER DONE -> ENEMY IN RANGE -> STRIKE!");
-                    } else {
-                        enterState(STATE_ATK_LOCK);
-                        DEBUG_PRINTLN(">>> ANVIL BREAKER DONE -> RE-LOCK!");
-                    }
-                }
-                
-                // An toàn: Thoát khẩn cấp nếu bị đâm vào sườn trong lúc đang lượn
-                if (elapsed_time > 100 && localData.impactDetected) {
-                    enterState(STATE_DEF_ANTI_PUSH);
-                    DEBUG_PRINTLN(">>> INTERRUPT: IMPACT DURING ANVIL BREAKER -> ANTI_PUSH!");
-                }
-                
-                break;
-            }
-
-            default:
-                enterState(STATE_IDLE);
-                driveBot(0, 0);
-                break;
         }
         static RobotState last_processed_state = STATE_IDLE;
         if (last_processed_state == currentState) {
@@ -1052,8 +1173,6 @@ const char* getStateName(RobotState state) {
         case STATE_ATK_DELAY_RUSH: return "DELAY_RUSH";
         case STATE_ATK_LOCK: return "LOCK";
         case STATE_ATK_STALEMATE_BRAKE: return "BRAKE";
-        case STATE_ATK_ANVIL_BREAKER: return "ANVIL_BRK";
-        case STATE_DEF_ANTI_PUSH: return "ANTI_PUSH";
         case STATE_DEF_SIDE_GUARD: return "SIDE_GUARD";
         case STATE_DEF_REAR_GUARD: return "REAR_GUARD";
         case STATE_DEF_EDGE_AVOID: return "EDGE_AVOID";

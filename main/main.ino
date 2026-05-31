@@ -10,6 +10,17 @@
 
 // KHÔNG DÙNG CÁC FILTER LỌC NHIỄU GÌ ĐÓ BỞI VÌ ĐO BẰNG VLX CÓ DELAY RẤT LỚN, NẾU DÙNG NÓ CÓ THỂ LÀM GIẢM KHẢ NĂNG PHẢN ỨNG CỦA BOT
 
+// NO ANTI_PUSH. LOGIC này chỉ có tác dụng với mấy con Sumobot magnetic bên nhật thôi.
+
+// Vấn đề:
+/*
+
+- Nếu gặp đối thủ mạnh hơn hoặc ngang bằng -> STATE_ANTI_PUSH khá vô dụng for some reason
+- ATK_STRIKE -> ATK_STALEMATE mà không sang STATE_ANTI_PUSH
+
+*/
+
+
 //Todo
 /*
 

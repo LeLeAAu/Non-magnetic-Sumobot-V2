@@ -328,7 +328,20 @@ void TaskSensorCode(void * pvParameters) {
         static float prev_a_mag = 1.0;  // Mặc định G = 1 khi đứng yên
         float delta_a = fabsf(current_a_mag - prev_a_mag);
         prev_a_mag = current_a_mag;
-        tempData.impactDetected = (delta_a > ACC_IMPACT_TH); // Nếu gia tốc thay đổi đột ngột -> ngưỡng -> có va chạm
+        // THUẬT TOÁN NHẬN DIỆN VA CHẠM (IMPACT DETECTION
+        // 1. Chỉ lấy Vector 2D (Mặt phẳng XY), loại bỏ hoàn toàn nhiễu từ trọng lực trục Z
+        float horizontal_accel = sqrt(tempData.accelX * tempData.accelX + tempData.accelY * tempData.accelY);
+        
+        // 2. Dùng bộ lọc EMA (Exponential Moving Average) để tạo "Gia tốc nền"
+        // Gia tốc nền sẽ học theo chuyển động hiện tại của xe nhưng phản ứng chậm hơn
+        static float ema_horizontal_accel = 0.0f;
+        ema_horizontal_accel = (0.15f * horizontal_accel) + (0.85f * ema_horizontal_accel);
+        
+        // 3. Xung lực va chạm (Jolt) là sự chênh lệch ĐỘT NGỘT giữa gia tốc tức thời và gia tốc nền
+        float impact_jolt = fabsf(horizontal_accel - ema_horizontal_accel);
+        
+        // 4. Kích hoạt cờ nếu giật cục vượt ngưỡng
+        tempData.impactDetected = (impact_jolt > ACC_IMPACT_TH);
 
         // Cảnh báo địch rúc sườn
         static uint32_t side_danger_start = 0;
