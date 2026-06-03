@@ -117,7 +117,17 @@ void TaskFSMCode(void * pvParameters) {
             }
             // ƯU TIÊN 3: Gặp Edge
             else if (localData.edgeDetect && !should_ignore_edge) {
-                if (currentState != STATE_DEF_EDGE_AVOID && currentState != STATE_DEF_LAST_STAND) {
+                
+                // KIỂM TRA NGOẠI LỆ: Đang tấn công mà bị đẩy lùi chạm vạch đuôi (mũi không chạm)
+                bool is_pushed_to_edge = (currentState == STATE_ATK_STRIKE) && 
+                                         (localData.line[2] <= TCRT_EDGE_TH || localData.line[3] <= TCRT_EDGE_TH) &&
+                                         (localData.line[0] > TCRT_EDGE_TH && localData.line[1] > TCRT_EDGE_TH);
+
+                if (is_pushed_to_edge) {
+                    // KHÔNG LÀM GÌ CẢ Ở ĐÂY. 
+                    // Bỏ qua Edge Avoid để nhường quyền cho Anchor Brake bên trong STATE_ATK_STRIKE tự xử lý.
+                } 
+                else if (currentState != STATE_DEF_EDGE_AVOID && currentState != STATE_DEF_LAST_STAND) {
                     
                     // Nếu đang đâm thẳng mà chạm vạch -> Tăng bộ đếm
                     if (currentState == STATE_ATK_STRIKE) {
@@ -260,16 +270,15 @@ void TaskFSMCode(void * pvParameters) {
 
             case STATE_ATK_FIRST_FLANK:
             {
-                // --- KAIZEN: KHỬ MAGIC NUMBERS ---
+
                 const float ANGLE_UNKNOWN = 999.0;
                 const float ANGLE_FRONT_TH = 15.0; // Ngưỡng trực diện (có thể tái sử dụng ANGLE_WIDE)
                 const float ANGLE_DIAG_TH = 60.0;  // Ngưỡng chéo góc
                 
-                const uint32_t BLIND_TIME_MS = 80;       // Thời gian mù ân hạn chống nhiễu ToF
+                const uint32_t BLIND_TIME_MS = 233;       // Thời gian mù ân hạn chống nhiễu ToF
                 const uint32_t TIME_PIVOT_45 = 60;      // Thời gian vả mâm 45 độ (Tùy chỉnh theo motor)
-                const uint32_t TIME_RUSH_BLIND = 200;    // Thời gian càn quét điểm mù (Scenario 2)
-                const uint32_t TIME_RUSH_STRAIGHT = 200; // Thời gian phi thẳng sau khi né (Scenario 1, 3)
-                // ---------------------------------
+                const uint32_t TIME_RUSH_BLIND = 400;    // Thời gian càn quét điểm mù (Scenario 2)
+                const uint32_t TIME_RUSH_STRAIGHT = 350; // Thời gian phi thẳng sau khi né (Scenario 1, 3)
 
                 uint32_t elapsed_time = fsm_current_time - state_start_time;
                 static int flank_scenario = 0;
@@ -300,17 +309,19 @@ void TaskFSMCode(void * pvParameters) {
 
                 // 2. TRIGGER NGẮT KHẨN CẤP
                 if (elapsed_time > BLIND_TIME_MS) {
-                    // Chỉ bung đòn STRIKE duy nhất khi địch lọt đúng vào mắt d0 (Chính diện)
-                    if (localData.dist[0] < WARN_DIST) {
+                    
+                    // Rút mốc Bailout từ WARN_DIST (550) xuống 350 hoặc DIST_CLOSE
+                    // Địch phải thực sự sát mặt mới bỏ dở đòn lách để đâm.
+                    if (localData.dist[0] < 350) {
                         enterState(STATE_ATK_STRIKE);
-                        DEBUG_PRINTLN(">>> FIRST FLANK BAILOUT: ĐỊCH CHÍNH DIỆN -> BUNG STRIKE!");
+                        DEBUG_PRINTLN(">>> FIRST FLANK BAILOUT: ĐỊCH SÁT MẶT -> BUNG STRIKE!");
                         break;
                     }
-                    // Nếu bất kỳ mắt nào khác (d1, d2, d3, d4) bị áp sát -> Chỉ bật LOCK để bẻ lái vi sai ôm lại tâm
-                    else if (localData.dist[1] < WARN_DIST || localData.dist[2] < WARN_DIST || 
-                             localData.dist[3] < WARN_DIST || localData.dist[4] < WARN_DIST) {
+                    // Các mắt hông cũng phải ép cực gần mới được hoảng loạn
+                    else if (localData.dist[1] < 450 || localData.dist[2] < 450 || 
+                             localData.dist[3] < 450 || localData.dist[4] < 450) {
                         enterState(STATE_ATK_LOCK);
-                        DEBUG_PRINTLN(">>> FIRST FLANK BAILOUT: ĐỊCH LỆCH GÓC -> LOCK ĐỂ QUÉT LẠI TÂM!");
+                        DEBUG_PRINTLN(">>> FIRST FLANK BAILOUT: BỊ ÉP SƯỜN NGUY HIỂM -> LOCK!");
                         break;
                     }
                 }
@@ -321,7 +332,8 @@ void TaskFSMCode(void * pvParameters) {
                         // TRƯỜNG HỢP 1: d0 = min -> Trượt chéo góc 45 độ rồi đi thẳng
                         if (elapsed_time < TIME_PIVOT_45) { 
                             driveBot(PWM_MAX * turn_dir, -PWM_MAX * turn_dir);
-                        } else if (elapsed_time < TIME_RUSH_STRAIGHT) {
+                        } else if (elapsed_time < (TIME_PIVOT_45 + TIME_RUSH_STRAIGHT)) {
+                            // Sửa lại thành cộng dồn thời gian để logic trôi chảy
                             driveBot(PWM_MAX, PWM_MAX); 
                         } else {
                             enterState(STATE_ATK_LOCK); 
@@ -948,6 +960,34 @@ void TaskFSMCode(void * pvParameters) {
                 static uint32_t pushed_back_start = 0;
                 static bool has_confirmed_first_strike = false;
                 static uint32_t abs_strike_start = 0;
+
+                // ANCHOR BRAKE TẠI MÉP VỰC (WORM GEAR LOCK)
+                static uint32_t rear_safe_timer = 0;
+                static bool edge_anchor_active = false;
+                const uint32_t REAR_SAFE_TIMEOUT = 150; // [X] = 150ms
+
+                // Đọc trực tiếp cảm biến line sau để phản ứng 0ms
+                bool rear_on_edge = (localData.line[2] <= TCRT_EDGE_TH || localData.line[3] <= TCRT_EDGE_TH);
+
+                if (rear_on_edge) {
+                    edge_anchor_active = true;
+                    rear_safe_timer = 0; // Đang đè vạch thì liên tục reset đồng hồ an toàn
+                }
+
+                if (edge_anchor_active) {
+                    driveBot(0, 0); // Khoá cứng bánh răng trục vít
+                    
+                    if (!rear_on_edge) {
+                        if (rear_safe_timer == 0) rear_safe_timer = fsm_current_time;
+
+                        // Nếu đuôi xe đã sạch vạch liên tục trong 150ms -> Thoát mỏ neo, húc tiếp!
+                        if (fsm_current_time - rear_safe_timer >= REAR_SAFE_TIMEOUT) {
+                            edge_anchor_active = false;
+                            DEBUG_PRINTLN(">>> [ANCHOR BRAKE] CLEARED -> RESUME STRIKE!");
+                        }
+                    }
+                    break; // QUAN TRỌNG: Ngắt luồng tại đây, không cho phép chạy các lệnh xả PWM phía dưới
+                }
 
                 // Reset cờ khi vừa bước vào State
                 if (state_just_entered) {
