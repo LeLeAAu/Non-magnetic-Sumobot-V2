@@ -53,10 +53,6 @@ The system operates using a non-blocking multithreaded architecture:
 
 * **Core 1 (TaskFSM):** Controls the Finite State Machine (FSM) and PWM signal generation. Data shared between both cores is synchronized safely using a Spinlock Mutex.
 
-**FSM (19 FSM States):**
-* **Defensive States:** Edge Avoid, Anti-Lift, Anti-Push, Side Guard.
-* **Offensive States:** Target Locking, Strike, Flank, Lift, Feint, Stalemate Brake.
-
 ---
 
 ## VII. ESP32 Pinout
@@ -127,11 +123,6 @@ Tổng trọng lượng linh kiện kỹ thuật khoảng **1256g**. Thay vì c�
 Hệ thống chạy đa luồng không tắc nghẽn (Non-blocking):
 * **Core 0 (TaskSensor):** Quét I2C liên tục. Áp dụng bộ lọc Median cho dữ liệu khoảng cách và bộ lọc EMA để tính vận tốc tiếp cận của địch ($v_e$).
 * **Core 1 (TaskFSM):** Điều khiển Cỗ máy trạng thái hữu hạn (FSM) và băm xung PWM. Dữ liệu giữa hai Core được khóa an toàn bằng Spinlock Mutex.
-
-**FSM (19 trạng thái FSM):**
-* **Phòng thủ:** Né mép sàn (Edge Avoid), Chống nạy mũi (Anti-Lift), Chống đẩy mù (Anti-Push), Thủ sườn (Side Guard).
-* **Tấn công:** Điều hướng khóa góc mục tiêu (Lock), Đâm trực diện (Strike), Tạt sườn (Flank), Bẩy văng (Lift), Nhử đòn (Feint), Giằng co tự hãm (Stalemate Brake).
-
 ---
 
 ## VII. Sơ đồ chân ESP32 (Pinout)
