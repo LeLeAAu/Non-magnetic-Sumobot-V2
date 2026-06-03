@@ -37,7 +37,6 @@ void drawCurrentFace() {
         case STATE_ATK_STRIKE:
         case STATE_ATK_LIFT:
         case STATE_ATK_DELAY_RUSH:
-        case STATE_ATK_FEINT:
             curX = 22; face = "MwM"; break;
 
         // Nhóm phòng thủ, né tránh khẩn cấp (Bao trọn các thủ sườn, thủ đít, né vạch mới thêm)

@@ -127,6 +127,8 @@ extern const float ANGLE_REAR;
 extern const float ANGLE_BIN_RES;
 extern volatile float KP_STEERING;
 extern const float ANGLE_SLOPPY;
+extern const uint16_t DIST_CORNER_SCAN_MAX;   // Cự ly d0 tối đa để kích hoạt check hở góc 45 độ
+extern const int16_t TOF_SLID_MISMATCH_TH;    // Độ chênh lệch (mm) xác nhận tia d1/d2 bắn trượt sườn
 
 extern const uint16_t DIST_BLIND;
 extern const uint16_t DIST_CLOSE;
@@ -145,9 +147,11 @@ extern const uint8_t VLX_ADDRESSES[5];
 // Cấu trúc dữ liệu và trạng thái
 
 // Định nghĩa các trạng thái FSM
+// Sửa lại danh sách enum:
 enum RobotState {
     STATE_IDLE, STATE_INIT_DELAY,
-    STATE_ATK_STRIKE, STATE_ATK_LIFT, STATE_ATK_FEINT, 
+    STATE_ATK_FIRST_FLANK,
+    STATE_ATK_STRIKE, STATE_ATK_LIFT, 
     STATE_ATK_DELAY_RUSH, STATE_ATK_LOCK, STATE_ATK_STALEMATE_BRAKE,
     STATE_DEF_ANTI_PUSH, STATE_DEF_SIDE_GUARD, STATE_DEF_REAR_GUARD, 
     STATE_DEF_EDGE_AVOID, STATE_DEF_ANTI_LIFT, STATE_DEF_LAST_STAND,
@@ -169,6 +173,7 @@ struct SystemData {
     float v_e = 0.0f; // Vận tốc tiếp cận của bot đối thủ
     float t_robot = 0.0f, t_enemy = 9999.0f; // Thời gian dự kiến để chạm mục tiêu
     uint16_t current_PWM = 0; // Giá trị PWM hiện tại đang xuất ra motor
+    float imu_v_x = 0.0f; // Vận tốc tuyến tính ước lượng từ IMU (mm/s)
     
     // Boolean Flags (Chỉ chứa data do Sensor Core 0 tạo ra)
     bool closingFast = false; // Đối thủ đang lao tới nhanh

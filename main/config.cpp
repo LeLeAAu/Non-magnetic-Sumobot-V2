@@ -38,14 +38,15 @@ const float SENSOR_COS[5] = {1.0,  0.7071, 0.7071,  0.0, 0.0}; // Lookup table
 const float V_EMA_ALPHA = 0.25;         // Hệ số lọc EMA cho vận tốc tiếp cận (0.0 -> 1.0)
 const float V_DEADBAND_MM = 5.0;        // Deadband loại bỏ nhiễu rung li ti
 
+
 // --- Motor PWM (0-255) ---
 volatile uint8_t PWM_MAX = 255; // Toàn lực
-volatile uint8_t PWM_STRIKE_HOLD = 220; // Duy trì áp lực đẩy
-volatile uint8_t PWM_HIGH = 200; // Tốc độ cao
-const uint8_t PWM_JIGGLE = 177; // Lực đánh võng
-volatile uint8_t PWM_MED = 150; // Tốc độ trung bình
-volatile uint8_t PWM_LOW = 100; // Tốc độ thấp
-const uint8_t PWM_TURN_MIN = 80; // Lực tối thiểu để thắng ma sát tĩnh của hộp số Wormgear, chưa test thực tế, tạm để 80
+volatile uint8_t PWM_STRIKE_HOLD = 240; // Duy trì áp lực đẩy
+volatile uint8_t PWM_HIGH = 220; // Tốc độ cao
+const uint8_t PWM_JIGGLE = 197; // Lực đánh võng
+volatile uint8_t PWM_MED = 170; // Tốc độ trung bình
+volatile uint8_t PWM_LOW = 150; // Tốc độ thấp
+const uint8_t PWM_TURN_MIN = 130; // Lực
 const uint8_t PWM_PIVOT = 50;// Lực xoay tại chỗ chậm 
 
 // --- Góc & Cự ly Kinematics ---
@@ -55,8 +56,10 @@ const float ANGLE_LOST = 20.0;   // Góc lệch coi như hụt đòn
 const float ANGLE_FLANK = 25.0;  // Góc kích hoạt Flank
 const float ANGLE_REAR = -120.0; // Góc nhận diện địch phía sau
 const float ANGLE_BIN_RES = 5.0; // Độ phân giải Histogram
-volatile float KP_STEERING = 4.0;  // Hệ số tỉ lệ điều hướng
+volatile float KP_STEERING = 7.5;  // Hệ số tỉ lệ điều hướng
 const float ANGLE_SLOPPY = 30.0; // Góc lệch tối đa (vẫn cho phép ủi) khi đã rúc sát gầm địch
+const uint16_t DIST_CORNER_SCAN_MAX = 150;    // Địch vào tầm 150mm mới đủ điều kiện check hình học
+const int16_t TOF_SLID_MISMATCH_TH = 90;      // Lệch > 90mm nghĩa là d1/d2 đã trượt hoàn toàn ra không khí
 
 const uint16_t DIST_BLIND = 2000; // Khoảng cách coi như mù
 const uint16_t DIST_CLOSE = 300;  // Vùng tử thần áp sát gầm

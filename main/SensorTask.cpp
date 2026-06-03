@@ -28,8 +28,7 @@ static uint8_t dist_idx[5] = {0, 0, 0, 0, 0};
 // HÀM PHỤ TRỢ
 // Chuyển đổi PWM sang vận tốc tuyến tính xấp xỉ mm/s
 float getEstimatedVelocity(int pwm) {
-    // Tránh việc tính toán khi pwm = 0
-    if (pwm < 30) return 0; 
+    if (abs(pwm) < 30) return 0; // Sửa thành abs(pwm) để trị tuyệt đối
     return ((float)pwm / 150.0) * V_MAX_60;
 }
 
@@ -83,54 +82,59 @@ void TaskSensorCode(void * pvParameters) {
         static bool real_closingFast = false;
         static float real_t_robot = 0.0f;
         static float real_t_enemy = 9999.0f;
+        static float prev_d = 8190.0f;
 
         // TOÀN BỘ LOGIC CẢM BIẾN THẬT
         bool has_new_tof = false;
         
         // ĐỌC CẢM BIẾN VÀ CƠ CHẾ WATCHDOG
         for (int i = 0; i < 5; i++) {
-            if (sensorsToF[i].dataReady()) { // Chỉ đọc khi ToF đã báo đo xong - non-blocking mode
-                int raw_dist_calc = (int)sensorsToF[i].read(false);
-                
-                // Kiểm tra trạng thái dữ liệu (RangeStatus == 0 là đo thành công hợp lệ)
-                // Nếu báo lỗi (ngoài tầm, nhiễu sáng, yếu...), ép thẳng khoảng cách thành 8190
-                if (sensorsToF[i].ranging_data.range_status != 0) {
-                    raw_dist_calc = 8190;
-                } else {
-                    raw_dist_calc += TOF_OFFSET[i];
-                }
-                
-                uint16_t raw_dist = (raw_dist_calc < 0) ? 0 : (uint16_t)raw_dist_calc;
-                // Trạng thái idle/chờ -> dùng bộ lọc median để lấy mốc tĩnh
-                if (currentState == STATE_IDLE || currentState == STATE_INIT_DELAY) {
-                    dist_history[i][dist_idx[i]] = raw_dist;
-                    dist_idx[i] = (dist_idx[i] + 1) % MEDIAN_WINDOW;
-                    tempData.dist[i] = getMedian(dist_history[i]);
-                    last_valid_dist[i] = tempData.dist[i];
-                } else { // Các trạng thái khác cần tốc độ cao nên dùng Spike Filter (Lọc gai nhiễu)
-                    int delta_dist = (int)raw_dist - (int)last_valid_dist[i];
-                    // Nếu khoảng cách đột ngột thay đổi > 200mmm (Có thể do nhiễu bóng ma hoặc tay trọng tài)
-                    if (delta_dist > 200 && last_valid_dist[i] < 1500) { 
-                        spike_count[i]++;
-                        // Bỏ qua lỗi đầu tiên. Nếu xuất hiện 2 lần liên tiếp -> cập nhật
-                        if (spike_count[i] <= 1) raw_dist = last_valid_dist[i];
-                        else last_valid_dist[i] = raw_dist;
+            // Chỉ poll I2C dataReady khi đã trôi qua ít nhất 28ms kể từ lần đọc trước, 
+            // vì chu kỳ đo tối thiểu của cảm biến là 33ms. Việc này giúp tiết kiệm băng thông bus I2C cực lớn!
+            if (last_tof_update[i] == 0 || (current_time - last_tof_update[i] >= 28)) {
+                if (sensorsToF[i].dataReady()) { // Chỉ đọc khi ToF đã báo đo xong - non-blocking mode
+                    int raw_dist_calc = (int)sensorsToF[i].read(false);
+                    
+                    // Kiểm tra trạng thái dữ liệu (RangeStatus == 0 là đo thành công hợp lệ)
+                    // Nếu báo lỗi (ngoài tầm, nhiễu sáng, yếu...), ép thẳng khoảng cách thành 8190
+                    if (sensorsToF[i].ranging_data.range_status != 0) {
+                        raw_dist_calc = 8190;
                     } else {
-                        spike_count[i] = 0;
-                        last_valid_dist[i] = raw_dist;
+                        raw_dist_calc += TOF_OFFSET[i];
                     }
-                    tempData.dist[i] = raw_dist;
-                }
-                
-                last_tof_update[i] = current_time; // Cập nhật _nhịp tim_ cho WatchDog
-                has_new_tof = true;
-                
-            } else {
-                // WATCHDOG: Rà soát I2C
-                if (last_tof_update[i] != 0 && (current_time - last_tof_update[i] > 200)) {
-                    // Nếu quá 200ms không có data (và không phải lúc mới boot)
-                    // -> Ép nó thành 8190 (mù tịt) để tránh tạo bóng ma
-                    tempData.dist[i] = 8190;
+                    
+                    uint16_t raw_dist = (raw_dist_calc < 0) ? 0 : (uint16_t)raw_dist_calc;
+                    // Trạng thái idle/chờ -> dùng bộ lọc median để lấy mốc tĩnh
+                    if (currentState == STATE_IDLE || currentState == STATE_INIT_DELAY) {
+                        dist_history[i][dist_idx[i]] = raw_dist;
+                        dist_idx[i] = (dist_idx[i] + 1) % MEDIAN_WINDOW;
+                        tempData.dist[i] = getMedian(dist_history[i]);
+                        last_valid_dist[i] = tempData.dist[i];
+                    } else { // Các trạng thái khác cần tốc độ cao nên dùng Spike Filter (Lọc gai nhiễu)
+                        int delta_dist = (int)raw_dist - (int)last_valid_dist[i];
+                        // Nếu khoảng cách đột ngột thay đổi > 200mmm (Có thể do nhiễu bóng ma hoặc tay trọng tài)
+                        if (delta_dist > 200 && last_valid_dist[i] < 1500) { 
+                            spike_count[i]++;
+                            // Bỏ qua lỗi đầu tiên. Nếu xuất hiện 2 lần liên tiếp -> cập nhật
+                            if (spike_count[i] <= 1) raw_dist = last_valid_dist[i];
+                            else last_valid_dist[i] = raw_dist;
+                        } else {
+                            spike_count[i] = 0;
+                            last_valid_dist[i] = raw_dist;
+                        }
+                        tempData.dist[i] = raw_dist;
+                    }
+                    
+                    last_tof_update[i] = current_time; // Cập nhật _nhịp tim_ cho WatchDog
+                    has_new_tof = true;
+                    
+                } else {
+                    // WATCHDOG: Rà soát I2C
+                    if (last_tof_update[i] != 0 && (current_time - last_tof_update[i] > 200)) {
+                        // Nếu quá 200ms không có data (và không phải lúc mới boot)
+                        // -> Ép nó thành 8190 (mù tịt) để tránh tạo bóng ma
+                        tempData.dist[i] = 8190;
+                    }
                 }
             }
         }
@@ -164,12 +168,22 @@ void TaskSensorCode(void * pvParameters) {
             }
 
         // TÍNH TOÁN ĐỘNG HỌC CHU KÌ ~40ms
-        float dt_kinematic = (current_time - last_kinematic_time) / 1000.0;
-        
-
-        if (dt_kinematic >= 0.040) { 
-            static float prev_d = 8190.0;
+            float dt_kinematic = (current_time - last_kinematic_time) / 1000.0;
             
+            if (dt_kinematic >= 0.040) { 
+                // TÍCH PHÂN VẬN TỐC TỪ IMU
+                static float estimated_vx = 0.0f;
+                // Đổi gia tốc từ G sang mm/s^2 (1G ~ 9810 mm/s^2)
+                float accel_mm_s2 = tempData.accelX * 9810.0f;
+                
+                // Hệ số 0.92 giúp xả trôi dạt về 0 nhanh chóng khi xe đứng yên
+                // Tránh việc vận tốc ảo tích tụ theo thời gian
+                estimated_vx = (estimated_vx * 0.92f) + (accel_mm_s2 * dt_kinematic);
+                tempData.imu_v_x = estimated_vx;
+            }
+            
+            static uint32_t fast_trigger_time = 0; 
+
             if (!tempData.isTargetLost && prev_d < 8190.0) {
                 float delta_d = d - prev_d;
                 // Lọc Deadband: trừ khử nhiễu rung lắc
@@ -180,12 +194,21 @@ void TaskSensorCode(void * pvParameters) {
                 // Bộ lọc Expotential Moving Average EMA
                 real_v_e = (V_EMA_ALPHA * v_raw) + ((1.0 - V_EMA_ALPHA) * real_v_e);
 
-                // Phân loại nhịp độ trận đấu
-                if (real_v_e > 450.0) real_closingFast = true; // Địch đang lao nhanh
-                else if (real_v_e < 350.0) real_closingFast = false;
+                // Phân loại nhịp độ trận đấu với Timer chốt trạng thái 0.5s
+                if (real_v_e > 450.0) { 
+                    real_closingFast = true; // Địch đang lao nhanh
+                    fast_trigger_time = current_time; // Chốt mốc thời gian bật true
+                } 
+                else if (real_v_e < 350.0) {
+                    // Chỉ cho phép hạ cờ false nếu đã giữ true được ít nhất 500ms
+                    if (current_time - fast_trigger_time >= 500) {
+                        real_closingFast = false;
+                    }
+                }
             } else {
                 real_v_e = 0.0;
                 real_closingFast = false;
+                fast_trigger_time = 0; 
             }
             
             // Tính toán Intercept Point để tạt sườn
@@ -210,7 +233,6 @@ void TaskSensorCode(void * pvParameters) {
             prev_d = d;
             last_kinematic_time = current_time;
         }
-    } 
     else if (current_time - last_kinematic_time > 150) { 
         // Reset Kinematics nếu ToF mù quá lâu
         real_v_e = 0.0;
@@ -274,23 +296,40 @@ void TaskSensorCode(void * pvParameters) {
         tempData.pitch = atan2(-tempData.accelX, sqrt(tempData.accelY * tempData.accelY + tempData.accelZ * tempData.accelZ)) * 180.0 / M_PI;
         tempData.roll  = atan2(tempData.accelY, tempData.accelZ) * 180.0 / M_PI;
 
-        // Tích phân Gyro Z để tính Yaw
-        float dt_yaw = (current_time - last_yaw_time) / 1000.0f;
-        last_yaw_time = current_time;
-        float gyroZ = myIMU.readFloatGyroZ();
-        if (fabsf(gyroZ) > 1.0f) { // Lọc nhiễu nhỏ (deadband)
-            tempData.yaw += gyroZ * dt_yaw;
+        
+        // 1. Đọc Raw Data
+        bool raw_pitchUp   = (tempData.pitch > PITCH_TH); 
+        bool raw_pitchDown = (tempData.pitch < -PITCH_TH); 
+
+        // 2. Lọc Debounce 80ms để chốt trạng thái vật lý thực sự (chống spike do đâm)
+        static uint32_t pitch_up_start = 0;
+        static uint32_t pitch_down_start = 0;
+
+        bool pitchUp = false;
+        if (raw_pitchUp) {
+            if (pitch_up_start == 0) pitch_up_start = current_time;
+            if (current_time - pitch_up_start >= 80) pitchUp = true; // Giữ > 80ms mới xác nhận bị hớt gầm
+        } else {
+            pitch_up_start = 0;
         }
 
-        bool pitchUp   = (tempData.pitch > PITCH_TH); // Ngóc đầu lên
-        bool pitchDown = (tempData.pitch < -PITCH_TH);  // Cắm đầu xuống
+        bool pitchDown = false;
+        if (raw_pitchDown) {
+            if (pitch_down_start == 0) pitch_down_start = current_time;
+            if (current_time - pitch_down_start >= 80) pitchDown = true;
+        } else {
+            pitch_down_start = 0;
+        }
+
         bool rollChange = fabsf(tempData.roll) > PITCH_TH;  // Nghiêng lật xe
         bool isTipping = pitchUp || pitchDown || rollChange;
 
-        // Khi xe bị hếch lên, mắt TCRT trước sẽ nhấc khỏi mặt đất, nhận sai thành vạch trắng thành vực sâu.
-        // Phải dùng IMU để ignore cảnh báo giả này lại
-        bool ignore_front = pitchUp;
-        bool ignore_rear  = pitchDown;
+        // 3. LƯU Ý KỸ THUẬT:
+        // Cảm biến TCRT phản ứng bằng vận tốc ánh sáng. Ngay khi mũi xe nảy lên 1ms, 
+        // TCRT lập tức báo sai thành vực sâu. 
+        // Do đó ta PHẢI dùng raw_pitch (không delay) để che mắt TCRT ngay lập tức.
+        bool ignore_front = raw_pitchUp;
+        bool ignore_rear  = raw_pitchDown;
 
         bool edge_FL = (!ignore_front) && (tempData.line[0] <= TCRT_EDGE_TH);
         bool edge_FR = (!ignore_front) && (tempData.line[1] <= TCRT_EDGE_TH);
@@ -367,8 +406,8 @@ void TaskSensorCode(void * pvParameters) {
         read_index.store(write_index); 
 
         // Ngắt mềm (Giữ nguyên lệnh Notify để đánh thức FSM)
-        // Nếu phát hiện các event nguy hiểm -> không đợi FSM ở Core 1 tự quay lại loop -> Core 0 phát tín hiệu TaskNotify vào thẳng FSM ép nó wake up xử lí ngay trong 0ms
-        if (tempData.edgeDetect || tempData.fallOut || tempData.beingLifted || tempData.impactDetected) {
+        // Nếu có dữ liệu ToF mới hoặc phát hiện các event nguy hiểm -> không đợi FSM ở Core 1 tự quay lại loop -> Core 0 phát tín hiệu TaskNotify vào thẳng FSM ép nó wake up xử lí ngay trong 0ms
+        if (has_new_tof || tempData.edgeDetect || tempData.fallOut || tempData.beingLifted || tempData.impactDetected) {
             if (TaskFSMHandle != NULL) xTaskNotifyGive(TaskFSMHandle);
         }
 
@@ -404,7 +443,7 @@ void TaskSensorCode(void * pvParameters) {
                         // Cố gắng khởi tạo lại và đổi địa chỉ
                         if (sensorsToF[i].init()) {
                             sensorsToF[i].setAddress(VLX_ADDRESSES[i]); // Đợi ToF này đổi địa chỉ an toàn xong
-                            sensorsToF[i].setDistanceMode(VL53L1X::Long);
+                            sensorsToF[i].setDistanceMode(VL53L1X::Medium);
                             sensorsToF[i].setMeasurementTimingBudget(33000);
                             sensorsToF[i].startContinuous(34);
                             

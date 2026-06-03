@@ -10,30 +10,59 @@
 
 // KHÔNG DÙNG CÁC FILTER LỌC NHIỄU GÌ ĐÓ BỞI VÌ ĐO BẰNG VLX CÓ DELAY RẤT LỚN, NẾU DÙNG NÓ CÓ THỂ LÀM GIẢM KHẢ NĂNG PHẢN ỨNG CỦA BOT
 
-// NO ANTI_PUSH. LOGIC này chỉ có tác dụng với mấy con Sumobot magnetic bên nhật thôi.
+// NO ANTI_PUSH. 
+// NO FEINT
+// CÁC LOGIC PHỨC TẠP chỉ có tác dụng với mấy con Sumobot magnetic bên nhật thôi.
 
 // KHÔNG THÊM CÁC STATE RETREAT. Hãy tập trung vào các logic tấn công
 
+
+/*
+No-load
+	Rated Voltage: 12V
+	RPM 260
+	Current 0.3A
+Rated-load
+	RPM 200
+	Current 1.6A
+	Torque 5kg.cm
+	Power 19.2W
+Stall
+	Torque 25kg.cm
+	Current 6.5A
+Starting voltage 2V
+
+Input Voltage: 6 ~ 27Vdc.
+Driver: Dual BTS7960 H Bridge Configuration.
+Peak current: 43-Amp.
+PWM capability of up to 25 kHz.
+Control Input Level: 3.3~5V.
+Control Mode: PWM or level
+Working Duty Cycle: 0 ~100%.
+Over-voltage Lock Out.
+Under-voltage Shut Down.
+
+Bánh xe 65mm bề rộng 27mm
+*/
 // Vấn đề:
 /*
-
-
+- Chuyển sang ATK_LOCK khi d0 và (d1 hoặc d3) ở gần.
+- Có lẽ nên để riêng các thông số DIST chp FIRST_FLANK
 */
 
 
 //Todo
 /*
 - Nâng cấp các trạng thái tấn công, tập trung vào tấn công
-- làm một cái kiểu -> Ngay khi vào -> tính toán trong init -> nếu xác nhận được địch ở đâu thì cứ chạy một đoạn -> xoay thẳng bot về phía địch -> đâm - và chỉ flank đúng lần đầu đấy - 
+- Sau test thực tế nhớ điều chỉnh các thông số trong case STATE_ATK_FIRST_FLANK:
 
--
 */
 
 
 // Qs - Ans
 /*
 - Có nên giảm vTaskDelay(pdMS_TO_TICKS(50)); xuống k? - Không
-
+- Nhớ thêm thời gian mù trong mỗi giai đoạn chuyển tiếp
 */
 
 // CMD: pip install pyserial numpy matplotlib
@@ -138,7 +167,7 @@ void setup() {
             hardwareError = true;
         } else {
             sensorsToF[i].setAddress(VLX_ADDRESSES[i]); 
-            sensorsToF[i].setDistanceMode(VL53L1X::Long); // Chế độ đo xa 4m, chế độ đo gần không thể dùng trong thực tế do nó gặp nhiều lỗi làm cho việc tính toán lỗi theo
+            sensorsToF[i].setDistanceMode(VL53L1X::Medium); // Chế độ đo trung bình 2.9m, tốt hơn chế độ Long và Short dưới ánh sáng mạnh
             sensorsToF[i].setMeasurementTimingBudget(33000); // 33ms/mẫu
             sensorsToF[i].startContinuous(34); // Min là 33, để 34 để tối ưu hoá
         }

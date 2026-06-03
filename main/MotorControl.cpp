@@ -22,44 +22,41 @@ void setMotors(int leftSpeed, int rightSpeed) {
     int req_left_sign = (leftSpeed > 0) ? 1 : ((leftSpeed < 0) ? -1 : 0);
     int req_right_sign = (rightSpeed > 0) ? 1 : ((rightSpeed < 0) ? -1 : 0);
 
-    // --- XỬ LÝ MOTOR TRÁI ---
-    if (left_in_deadtime) {
-        // Nếu đang trong thời gian om deadtime
-        if (current_time - left_deadtime_start >= DEADTIME_MS) {
-            left_in_deadtime = false;       // Đã xả xong, gỡ cờ
-            last_left_sign = req_left_sign; // Chốt hướng chạy mới
-        } else {
-            leftSpeed = 0; // Vẫn chưa đủ 30ms, ép PWM = 0
-        }
-    } else {
-        // Kiểm tra xem có sự "lật lọng" đột ngột từ Tiến sang Lùi (hoặc ngược lại) không
-        if (last_left_sign != 0 && req_left_sign != 0 && last_left_sign != req_left_sign) {
-            left_in_deadtime = true;
-            left_deadtime_start = current_time;
-            leftSpeed = 0; // Cắt động cơ ngay lập tức
-        } else {
-            // Không đảo chiều gắt, cập nhật hướng hiện tại
-            if (req_left_sign != 0) last_left_sign = req_left_sign;
-        }
-    }
+    // 3. THUẬT TOÁN TRACTION CONTROL (VUỐT GA CHỐNG TRƯỢT TIRE SLIP)
+    static int current_pwm_L = 0;
+    static int current_pwm_R = 0;
+    static uint32_t last_ramp_time = 0;
+    
+    uint32_t dt = current_time - last_ramp_time;
+    last_ramp_time = current_time;
+    if (dt > 50) dt = 5; // Lọc nhiễu thời gian nếu OS bị suspend
+    
+    // Tốc độ tăng ga: 3 đơn vị PWM cho mỗi 1ms (Mất ~85ms để đạt max 255). 
+    // Thông số này đủ gắt để húc, nhưng đủ mềm để lốp bắt được ma sát tĩnh.
+    int max_step = dt * 3; 
 
-    // XỬ LÝ MOTOR PHẢI
-    if (right_in_deadtime) {
-        if (current_time - right_deadtime_start >= DEADTIME_MS) {
-            right_in_deadtime = false;
-            last_right_sign = req_right_sign;
-        } else {
-            rightSpeed = 0;
+    // Hàm Lambda xử lý vuốt ga thông minh
+    auto smartRamp = [](int target, int current, int step) -> int {
+        // Phanh khẩn cấp hoặc bị FSM ép đảo chiều gắt -> Cắt ga ngay lập tức
+        if (target == 0 || (target > 0 && current < 0) || (target < 0 && current > 0)) {
+            return target; 
         }
-    } else {
-        if (last_right_sign != 0 && req_right_sign != 0 && last_right_sign != req_right_sign) {
-            right_in_deadtime = true;
-            right_deadtime_start = current_time;
-            rightSpeed = 0;
-        } else {
-            if (req_right_sign != 0) last_right_sign = req_right_sign;
-        }
-    }
+        // Đang lấy đà tiến lên
+        if (target > 0 && target > current) return min(target, current + step);
+        // Đang lấy đà lùi lại
+        if (target < 0 && target < current) return max(target, current - step);
+        
+        // Đang giảm tốc độ (nhưng chưa về 0) -> Chấp nhận xả ga ngay
+        return target; 
+    };
+
+    // Áp dụng bộ lọc cho tín hiệu đã qua xử lý Deadtime
+    leftSpeed = smartRamp(leftSpeed, current_pwm_L, max_step);
+    rightSpeed = smartRamp(rightSpeed, current_pwm_R, max_step);
+
+    // Cập nhật bộ nhớ cho vòng lặp sau
+    current_pwm_L = leftSpeed;
+    current_pwm_R = rightSpeed;
 
     // XẢ TÍN HIỆU RA CHÂN VẬT LÝ
     // Lúc này leftSpeed và rightSpeed đã được bộ lọc phía trên xử lý an toàn
