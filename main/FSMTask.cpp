@@ -118,10 +118,12 @@ void TaskFSMCode(void * pvParameters) {
             // ƯU TIÊN 3: Gặp Edge
             else if (localData.edgeDetect && !should_ignore_edge) {
                 
-                // KIỂM TRA NGOẠI LỆ: Đang tấn công mà bị đẩy lùi chạm vạch đuôi (mũi không chạm)
+                // KIỂM TRA NGOẠI LỆ: Đang tấn công, bị chạm vạch đuôi, góc đối thủ chuẩn tâm (-10; +10) VÀ đối thủ phải ở trong STRIKE_DIST
                 bool is_pushed_to_edge = (currentState == STATE_ATK_STRIKE) && 
-                                         (localData.line[2] <= TCRT_EDGE_TH || localData.line[3] <= TCRT_EDGE_TH) &&
-                                         (localData.line[0] > TCRT_EDGE_TH && localData.line[1] > TCRT_EDGE_TH);
+                         (localData.line[2] <= TCRT_EDGE_TH || localData.line[3] <= TCRT_EDGE_TH) &&
+                         (localData.line[0] > TCRT_EDGE_TH && localData.line[1] > TCRT_EDGE_TH) &&
+                         (!localData.isTargetLost && localData.enemy_angle >= -10.0f && localData.enemy_angle <= 10.0f) &&
+                         (localData.dist[0] < STRIKE_DIST);
 
                 if (is_pushed_to_edge) {
                     // KHÔNG LÀM GÌ CẢ Ở ĐÂY. 
@@ -966,8 +968,10 @@ void TaskFSMCode(void * pvParameters) {
                 static bool edge_anchor_active = false;
                 const uint32_t REAR_SAFE_TIMEOUT = 150; // [X] = 150ms
 
-                // Đọc trực tiếp cảm biến line sau để phản ứng 0ms
-                bool rear_on_edge = (localData.line[2] <= TCRT_EDGE_TH || localData.line[3] <= TCRT_EDGE_TH);
+                // Đọc cảm biến line sau kết hợp điều kiện góc chính diện VÀ khoảng cách d0 nằm trong STRIKE_DIST
+                bool rear_on_edge = (localData.line[2] <= TCRT_EDGE_TH || localData.line[3] <= TCRT_EDGE_TH) &&
+                    (!localData.isTargetLost && localData.enemy_angle >= -10.0f && localData.enemy_angle <= 10.0f) &&
+                    (localData.dist[0] < STRIKE_DIST);
 
                 if (rear_on_edge) {
                     edge_anchor_active = true;
