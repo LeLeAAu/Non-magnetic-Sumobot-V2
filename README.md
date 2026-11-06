@@ -4,7 +4,7 @@
 ## I. Overview
 An autonomous ESP32-based robot specifically designed for the UTC SumoBot competition. The project focuses on asymmetric mechanical design and multithreaded processing (FreeRTOS) to optimize high-speed tactical reaction performance.
 
-* **Status:** In Development.
+* **Status:** I had to leave it unfinished because the school didn't organize it. The code, however, still works perfectly.
 * **License:** MIT License.
 
 <img width="3300" height="2550" alt="Render" src="https://github.com/user-attachments/assets/b44ff627-61dc-4581-b793-258c26662c8b" />
@@ -81,7 +81,7 @@ The system operates using a non-blocking multithreaded architecture:
 ## I. Tổng quan
 Robot tự hành ESP32 thiết kế riêng cho giải SumoBot trường UTC. Dự án tập trung vào thiết kế cơ khí bất đối xứng và xử lý đa luồng (FreeRTOS) để tối ưu phản xạ chiến thuật tốc độ cao.
 
-* **Trạng thái:** Đang phát triển.
+* **Trạng thái:** Bỏ dở vì trường không tổ chức nó. Nhưng code thì vẫn hoạt động tốt.
 * **Giấy phép:** MIT License.
 <img width="3300" height="2550" alt="Render" src="https://github.com/user-attachments/assets/b44ff627-61dc-4581-b793-258c26662c8b" />
 ---
